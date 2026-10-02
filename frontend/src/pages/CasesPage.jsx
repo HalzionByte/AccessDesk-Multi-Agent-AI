@@ -88,11 +88,12 @@ export default function CasesPage() {
                     Order {item.orderId}
                   </p>
                 </div>
-                <div className="flex items-center gap-2 self-start">
+                <div className="relative flex items-center gap-2 self-start">
                   <StatusBadge status={item.status} />
                   <Button
-                    variant="ghost"
-                    className="size-9 min-h-0 px-0 py-0"
+                    variant="secondary"
+                    square
+                    className="size-11"
                     aria-label={`Options for ${item.trackingNo}`}
                     aria-haspopup="menu"
                     aria-expanded={openMenu === item.id}
@@ -105,7 +106,7 @@ export default function CasesPage() {
                     <svg
                       aria-hidden="true"
                       viewBox="0 0 24 24"
-                      className="size-5"
+                      className="size-6"
                       fill="currentColor"
                     >
                       <circle cx="5" cy="12" r="1.7" />
@@ -116,7 +117,7 @@ export default function CasesPage() {
                   {openMenu === item.id && (
                     <div
                       role="menu"
-                      className="absolute top-14 right-5 z-10 w-44 rounded-lg border border-slate-200 bg-white p-1 shadow-lg dark:border-stone-600 dark:bg-stone-700"
+                      className="absolute top-full right-0 z-10 mt-2 w-44 rounded-lg border border-slate-200 bg-white p-1 shadow-lg dark:border-stone-600 dark:bg-stone-700"
                     >
                       <Button
                         variant="ghost"

@@ -35,7 +35,7 @@ function ThemeIcon({ dark }) {
     <svg
       aria-hidden="true"
       viewBox="0 0 24 24"
-      className="size-5"
+      className="size-6"
       fill="none"
       stroke="currentColor"
       strokeWidth="1.8"
@@ -47,7 +47,7 @@ function ThemeIcon({ dark }) {
     <svg
       aria-hidden="true"
       viewBox="0 0 24 24"
-      className="size-5"
+      className="size-6"
       fill="none"
       stroke="currentColor"
       strokeWidth="1.8"
@@ -113,7 +113,8 @@ export default function AppShell() {
           <div className="ml-auto flex items-center gap-1">
             <Button
               variant="ghost"
-              className="size-10 px-0"
+              square
+              className="size-11"
               onClick={toggle}
               aria-label={dark ? "Use light mode" : "Use dark mode"}
             >
@@ -149,7 +150,8 @@ export default function AppShell() {
             {role && (
               <Button
                 variant="ghost"
-                className="size-10 px-0 md:hidden"
+                square
+                className="size-10 md:hidden"
                 onClick={() => setMenuOpen((value) => !value)}
                 aria-label="Toggle menu"
                 aria-expanded={menuOpen}
@@ -212,7 +214,8 @@ export default function AppShell() {
       </footer>
       {showTop && (
         <Button
-          className="fixed bottom-5 right-5 z-30 size-11 rounded-full px-0 shadow-lg"
+          square
+          className="fixed bottom-5 right-5 z-30 size-11 rounded-full shadow-lg"
           onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
           aria-label="Scroll to top"
         >

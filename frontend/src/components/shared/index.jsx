@@ -22,7 +22,8 @@ export function CitationChip({ citation, onClick }) {
   return (
     <Button
       variant="secondary"
-      className="min-h-0 rounded-full px-2.5 py-1 text-xs"
+      square
+      className="rounded-full px-2.5 py-1 text-xs"
       onClick={() => onClick(citation)}
     >
       {citation.id}

@@ -337,7 +337,8 @@ export default function SupportPage() {
                           {file.name}
                           <Button
                             variant="ghost"
-                            className="min-h-0 px-0 py-0 font-bold"
+                            square
+                            className="size-6 font-bold"
                             onClick={() =>
                               setFiles((current) =>
                                 current.filter(

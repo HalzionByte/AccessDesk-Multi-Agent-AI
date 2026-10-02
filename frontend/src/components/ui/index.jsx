@@ -16,6 +16,7 @@ export function Button({
   children,
   disabled,
   type = "button",
+  square = false,
   ...props
 }) {
   const styles = {
@@ -28,11 +29,15 @@ export function Button({
     ghost:
       "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-stone-400 dark:hover:bg-stone-700 dark:hover:text-stone-100",
   }
+  // Icon-only buttons need their padding and minimum height removed at the
+  // source. Passing `px-0` or `min-h-0` through className cannot work, because
+  // Tailwind decides the winner by stylesheet order, not class attribute order.
+  const sizing = square ? "min-h-0 p-0" : "min-h-10 px-4 py-2"
   return (
     <button
       type={type}
       disabled={disabled || loading}
-      className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-55 dark:focus-visible:ring-indigo-400 dark:focus-visible:ring-offset-stone-900 ${styles[variant]} ${className}`}
+      className={`inline-flex shrink-0 items-center justify-center gap-2 rounded-lg ${sizing} text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-55 dark:focus-visible:ring-indigo-400 dark:focus-visible:ring-offset-stone-900 ${styles[variant]} ${className}`}
       {...props}
     >
       {loading && <Spinner />}
@@ -181,7 +186,8 @@ export function Toast({ message, onClose }) {
         <span>{message}</span>
         <Button
           variant="ghost"
-          className="min-h-0 px-1 py-0"
+          square
+          className="size-8"
           onClick={onClose}
           aria-label="Dismiss"
         >
@@ -245,7 +251,8 @@ export function Dialog({
           </div>
           <Button
             variant="ghost"
-            className="size-9 min-h-0 shrink-0 px-0 py-0"
+            square
+            className="size-9"
             onClick={onClose}
             aria-label="Close dialog"
           >
