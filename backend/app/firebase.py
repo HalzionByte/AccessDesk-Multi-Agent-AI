@@ -78,3 +78,9 @@ def get_firestore_client(settings: Settings | None = None):
         raise
     except Exception as exc:
         raise FirebaseUnavailableError("Firestore is unavailable.") from exc
+
+
+def get_database():
+    """FastAPI dependency that returns the configured Firestore client."""
+
+    return get_firestore_client()

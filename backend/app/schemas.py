@@ -125,6 +125,7 @@ class Attachment(AppModel):
     draft_id: str | None = None
     case_id: str | None = None
     path: NonEmptyText
+    filename: NonEmptyText
     mime: NonEmptyText
     size: int = Field(ge=0)
     created_at: datetime | None = None

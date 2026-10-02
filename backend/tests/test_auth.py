@@ -1,41 +1,8 @@
 from __future__ import annotations
 
-import pytest
-
 from app import auth as auth_module
 from app.firebase import FirebaseUnavailableError
-
-CUSTOMER_CLAIMS = {
-    "uid": "demo-customer-1",
-    "name": "Ayesha Khan",
-    "email": "ayesha@demo.accessdesk.app",
-    "role": "customer",
-    "preferredLanguage": "roman-urdu",
-}
-
-STAFF_CLAIMS = {
-    "uid": "demo-staff-1",
-    "name": "Omar Siddiqui",
-    "email": "staff@demo.accessdesk.app",
-    "role": "staff",
-    "preferredLanguage": "en",
-}
-
-
-@pytest.fixture
-def token_decoder(monkeypatch):
-    def fake_decode(token: str):
-        if token == "customer-token":
-            return CUSTOMER_CLAIMS
-        if token == "staff-token":
-            return STAFF_CLAIMS
-        raise ValueError("invalid token")
-
-    monkeypatch.setattr(auth_module, "decode_firebase_token", fake_decode)
-
-
-def auth_header(token: str) -> dict[str, str]:
-    return {"Authorization": f"Bearer {token}"}
+from tests.auth_helpers import auth_header
 
 
 def test_me_returns_customer_profile_and_role(client, token_decoder):

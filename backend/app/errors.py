@@ -56,7 +56,7 @@ def register_error_handlers(app: FastAPI) -> None:
         detail = str(first_error.get("msg", "Invalid request."))
         message = f"{location}: {detail}" if location else detail
         return error_response(
-            status.HTTP_422_UNPROCESSABLE_ENTITY, "validation_error", message
+            status.HTTP_422_UNPROCESSABLE_CONTENT, "validation_error", message
         )
 
     @app.exception_handler(StarletteHTTPException)

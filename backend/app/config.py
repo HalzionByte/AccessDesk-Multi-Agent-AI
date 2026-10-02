@@ -57,6 +57,14 @@ class Settings(BaseSettings):
                 raise ValueError(f"Invalid CORS origin: {origin}")
         return ",".join(origins)
 
+    @field_validator("upload_dir")
+    @classmethod
+    def resolve_upload_directory(cls, value: Path) -> Path:
+        expanded = value.expanduser()
+        if not expanded.is_absolute():
+            expanded = PROJECT_DIR / expanded
+        return expanded.resolve()
+
     @property
     def cors_origins(self) -> list[str]:
         return self.cors_origin.split(",")
