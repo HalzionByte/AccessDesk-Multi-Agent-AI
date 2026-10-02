@@ -293,4 +293,4 @@ AccessDesk shows a practical pattern for trustworthy agentic software: let speci
 
 ---
 
-Built for a Generative AI and Agentic AI hackathon. See [AccessDesk PRD.md](./AccessDesk%20PRD.md) for the complete product specification.
+Built for a Generative AI and Agentic AI hackathon. The complete product specification is maintained locally in `AccessDesk PRD.md`.
