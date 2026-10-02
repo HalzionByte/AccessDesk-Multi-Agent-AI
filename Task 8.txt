@@ -1,0 +1,306 @@
+================================================================================
+TASK 8 - CUSTOMER SCREENS: SUPPORT CHAT AND MY CASES
+Completion: 90%
+================================================================================
+
+Source of truth: README.md (repo root). Design details verified against
+"2.7 UI design system". Where this document and the README disagree, the
+README wins.
+
+Status legend
+  [x] Complete and verified
+  [ ] Not implemented
+  [~] Partial
+  [!] Blocked - waiting on a prerequisite task
+
+Screens: /support and /cases
+Built entirely on Task 7 components. No new UI primitives were invented.
+
+
+--------------------------------------------------------------------------------
+1. SUPPORT SCREEN  (frontend/src/pages/SupportPage.jsx)
+--------------------------------------------------------------------------------
+
+[x] Order selector
+    components/ui Select, populated from api.getOrders().
+    Renders "NF-10482 - Orbit Wireless Headphones" style labels.
+
+[x] Chat with ChatBubble
+    components/shared ChatBubble. Assistant left, customer right.
+    16-message conversation tested end to end.
+
+[x] Checklist of missing information
+    components/shared Checklist. Five items: order, issue, description
+    (10+ characters), photo, requested resolution. The photo row is
+    overridden from the real uploaded file count rather than trusting
+    the server value.
+
+[x] Evidence upload - client-side type and size validation
+    Validates JPG / PNG / PDF, 5 MB per file, 3 files maximum.
+    Rejects with a specific message for each rule. Each chip is
+    individually removable.
+
+[x] CitationChip list
+    components/shared CitationChip. Clicking a citation raises a Toast
+    with the policy title and text. Verified rendering "P-3".
+
+[x] Request preview card
+    Order, issue, customer statement, evidence, requested resolution,
+    and the 7-day window result ("Within 7-day window" /
+    "Past 7-day window").
+
+[x] Confirm and Submit - disabled until the preview is complete
+    Rendered only when every checklist item is done, and the button is
+    additionally gated on the preview existing.
+
+[x] Confirm and Submit - generates an idempotency key
+    crypto.randomUUID() per submission attempt, sent as the
+    Idempotency-Key header. This matches the README requirement that the
+    submit endpoint be idempotent.
+
+[x] Confirm and Submit - disables on click so double-clicks cannot
+    submit twice
+    Three layers: `disabled={submitting}`, `loading={submitting}`, and a
+    guard `if (submitting || trackingNo) return`. Once a tracking number
+    exists the button is not rendered at all.
+
+[x] Agent Timeline
+    components/shared Timeline. Shows Intake, Policy and Resolution
+    agent steps with outcome text, plus a customer-confirmed and
+    case-created entry after submit.
+
+[x] Tracking number success card
+    Emerald card with the tracking number (for example AD-2026-0001) and
+    a "View my cases" action.
+
+[x] Existing-case card for S3 (repeated complaint)
+    Shown when the response carries existingCase. Displays the tracking
+    number and current StatusBadge instead of creating a duplicate.
+    This is the README's "Detects an existing active case before
+    creating another one".
+
+[x] "Assistant is busy, retry" state
+    Sending the word "busy" raises the llm_busy error, matching the
+    README line "Rate limits and model failures preserve the draft and
+    never show a false success". ErrorBanner offers Retry, which
+    re-runs the stage without losing the draft.
+
+[x] Mock scenario switcher - S1 Complete, S1 Incomplete, S3 Repeat,
+    S4 Late
+    Demo affordance only. See blocker B2 - it has no real-API
+    equivalent.
+
+
+--------------------------------------------------------------------------------
+2. MY CASES SCREEN  (frontend/src/pages/CasesPage.jsx)
+--------------------------------------------------------------------------------
+
+[x] Case cards with tracking number      (AD-2026-0008, AD-2026-0005)
+[x] Order reference                       (Order NF-10482)
+[x] Summary
+[x] StatusBadge                           (all 7 colours from 2.7)
+[x] Staff information request
+    Amber panel, "Staff requested more information", with the staff
+    message. Only rendered when status is "Needs Information".
+[x] Reply box
+    Textarea plus Send reply. Disabled until the reply is non-empty, and
+    shows a loading state while sending.
+
+[x] View-details dialog
+    Dialog listing status, order, issue, customer statement, evidence,
+    requested resolution and submission date.
+
+[x] Uses only Task 7 components
+    Button, Card, Dialog, EmptyState, ErrorBanner, Skeleton, StatusBadge,
+    Textarea, Toast, PageHeader. No bespoke primitives.
+
+
+--------------------------------------------------------------------------------
+3. STATES  (section 2.7: "Every screen must show loading, empty state,
+   and error state with retry")
+--------------------------------------------------------------------------------
+
+    Screen      Loading                Empty                    Error + retry
+    ---------   --------------------   ----------------------   --------------
+    /support    TypingIndicator        EmptyState x2             ErrorBanner
+    /cases      Skeleton x2            EmptyState                ErrorBanner
+    /login      Button spinner         n/a                       ErrorBanner
+
+[x] /support empty state - no orders
+    "No orders yet". A damaged-product report needs an order, so an
+    account with no orders cannot start a draft. Suppresses the order
+    selector, chat, composer and the whole right-hand column.
+
+[x] /support empty state - empty transcript
+    "No messages yet". Only reachable when the assistant returns no
+    reply text; loadScenario pushes a message conditionally so the state
+    is genuinely reachable rather than dead code.
+
+[x] /support error + retry
+    ErrorBanner with Retry, re-running the current stage.
+
+[x] /cases loading, empty and error
+    All three, with ErrorBanner onRetry={load}.
+
+[x] Buttons that call the API disable while loading
+    /support Send, Confirm and submit, /cases Send reply, /login Log in
+    and both demo buttons. All five confirmed.
+
+[!] /staff - not in this task's scope
+    StaffPage is a placeholder with an empty state only; no loading or
+    error state, because it has no data to load yet. Owned by the staff
+    task, not Task 8.
+
+
+--------------------------------------------------------------------------------
+4. "DONE WHEN" CRITERIA
+--------------------------------------------------------------------------------
+
+[x] S1 to S4 work against mocks
+    All four scenarios exercised: complete request, incomplete request,
+    repeated complaint, outside policy window.
+
+[ ] Later, the real API without code changes beyond VITE_USE_MOCKS
+    BLOCKED - see B1. This criterion is not met today.
+
+[x] Every state (loading, empty, error) exists
+    Verified for both Task 8 screens.
+
+[x] Layout works on a phone width
+    Verified at a 390px viewport in a same-origin iframe so media
+    queries actually applied.
+      /support  no horizontal overflow, zero overflowing elements,
+                grid correctly collapsed to a single 343px column
+      /cases    no horizontal overflow, zero overflowing elements,
+                reply box and tracking numbers intact
+
+
+--------------------------------------------------------------------------------
+5. BLOCKED / WAITING ON A PREREQUISITE
+--------------------------------------------------------------------------------
+
+B1. Real API integration - blocked on the backend task
+    The single unmet "Done when" criterion. Setting VITE_USE_MOCKS=false
+    today sends requests the README backend does not define:
+
+      client.js                      README defines              result
+      -----------------------------  --------------------------   --------
+      GET  /orders                   GET /orders                 match
+      GET  /cases                    GET /cases                  match
+      GET  /chat/{scenario}          POST /chat                  MISMATCH
+      POST /chat/{scenario}          POST /chat                  MISMATCH
+      POST /cases/submit             POST /drafts/{id}/submit    MISMATCH
+
+    Endpoints in the README table with no client method yet:
+      GET  /me                             profile and role
+      POST /drafts/{id}/attachments         upload evidence
+      GET  /drafts/{id}                     draft and preview
+      POST /cases/{id}/reply                reply to a staff request
+      GET  /staff/cases                     staff search and filter
+      PATCH /staff/cases/{id}/status        staff state transition
+      GET  /files/{attachmentId}            authorised evidence
+
+    Aligning client.js to the README table is the fix, but it should be
+    done once against the working backend rather than twice. Until then,
+    the mock layer is the only exercised path.
+
+B2. Scenario switcher is mock-only
+    "{scenario}" has no counterpart in the README API - the real flow is
+    POST /chat with a message. The S1-S4 picker must be gated behind
+    VITE_USE_MOCKS or removed for the live demo. Not a defect, but it
+    must not ship visible in live mode.
+
+B3. Reply box posts nothing
+    CasesPage.sendReply uses a local setTimeout and never calls
+    POST /cases/{id}/reply. Wired to a stub until the backend exists.
+
+B4. Evidence upload stops at the browser
+    Files are validated client-side and held in component state, then
+    dropped on submit. They are never sent to
+    POST /drafts/{id}/attachments. The README requires Firestore
+    metadata plus local attachment storage on the server.
+
+B5. Staff information request text is fixture data
+    The "Staff requested more information" copy comes from
+    mocks/fixtures.js, so it reflects whatever the fixture author wrote
+    rather than a real staff message.
+
+    NOTE: the backend task is referred to as "T9" because the Task 7
+    brief says "T8 and T9 can start using only mocks". Confirm the
+    actual task number before acting on this.
+
+
+--------------------------------------------------------------------------------
+6. VERIFICATION PERFORMED
+--------------------------------------------------------------------------------
+
+  pnpm build                built in ~165ms, 0 errors
+  npx tsc --noEmit          exit 0
+  pnpm format (oxfmt)       17 files, 0 errors
+  S1-S4 against mocks       all four scenarios driven in a browser
+  Chat growth               16 messages: composer stayed pinned at
+                            y=753, transcript height locked, page height
+                            constant, auto-scroll tracking newest
+  Busy/retry                llm_busy raised, draft preserved, Retry
+                            recovered
+  Double-submit guard       disabled + loading + trackingNo guard
+  Idempotency key           crypto.randomUUID() per attempt
+  Empty: no orders          selector, composer and right column
+                            suppressed
+  Empty: no transcript      "No messages yet"
+  Empty: /cases             "No cases yet" with a jump to Support
+  Phone width               390px, both pages, no horizontal overflow
+
+Not verified: any real network call. Every exercise above ran through
+mocks, because the backend does not exist yet (B1).
+
+
+--------------------------------------------------------------------------------
+7. DEVIATIONS AND NOTES
+--------------------------------------------------------------------------------
+
+- File names. The task brief names pages/Support.jsx and
+  pages/MyCases.jsx. The implementation is pages/SupportPage.jsx and
+  pages/CasesPage.jsx, routed at /support and /cases. Naming convention
+  matches the other pages. Worth reconciling before the staff task
+  imports these paths.
+
+- Customer case cancellation was removed. CasesPage previously offered a
+  customer-facing "Cancel case" action that set status to Closed. This
+  contradicted two explicit README statements: "The AI cannot ...
+  change a case status", "Customers cannot change case status", and
+  "Staff actions follow a validated case-status state machine". Removed
+  so the frontend matches the documented trust model.
+
+- Chat composer behaviour. The transcript was a min-height container, so
+  it grew with every message and pushed the composer down the page until
+  it sat under the footer. It is now a fixed-height scroll region
+  (h-20rem / sm:h-24rem) with auto-scroll to the newest message, plus a
+  mask-image fade so content scrolling under the top edge reads as
+  intentional.
+
+- Extra components used beyond the 2.7 list: Select and Dialog in
+  components/ui, TypingIndicator in components/shared. All three are
+  needed by these screens.
+
+
+--------------------------------------------------------------------------------
+8. SUMMARY
+--------------------------------------------------------------------------------
+
+  Build items                     18 of 18 complete            -> 100%
+  "Done when" criteria            3 of 4 met, 1 blocked         ->  75%
+  Screen states                   complete for both screens    -> 100%
+  Weighted for the blocked integration criterion              ->  90%
+
+                                                              COMPLETION 90%
+
+Every UI element Task 8 asks for is built, styled to section 2.7, and
+exercised in a browser. Both screens are demo-ready on mocks.
+
+The remaining 10% is a single item, and it is not frontend work: align
+api/client.js to the README API table once the backend routes exist
+(B1). Four sub-features - scenario picker gating, reply posting,
+attachment upload and live staff messages - all unblock at the same
+moment.
+================================================================================

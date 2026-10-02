@@ -1,0 +1,33 @@
+# AccessDesk backend dependencies.
+# Minimum bounds are used so the hackathon demo installs cleanly; pin exact
+# versions before any release build.
+#
+#   python -m venv .venv
+#   pip install -r requirements.txt
+
+# --- API layer -------------------------------------------------------------
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+pydantic>=2.9.0
+pydantic-settings>=2.5.0
+python-multipart>=0.0.9
+
+# --- Authentication and database -------------------------------------------
+# Verifies Firebase ID tokens and is the only writer to Cloud Firestore.
+firebase-admin>=6.5.0
+
+# --- Agent orchestration ----------------------------------------------------
+crewai>=0.80.0
+groq>=0.11.0
+
+# --- Policy retrieval -------------------------------------------------------
+# Local lexical BM25 search over backend/app/data/policy.md
+rank-bm25>=0.2.2
+
+# --- Configuration ----------------------------------------------------------
+python-dotenv>=1.0.0
+
+# --- Testing and evaluation -------------------------------------------------
+pytest>=8.0.0
+pytest-asyncio>=0.24.0
+httpx>=0.27.0

@@ -1,2 +1,62 @@
-# Product requirements document (local only)
+# ---------------------------------------------------------------------------
+# Local-only documents
+# ---------------------------------------------------------------------------
 /AccessDesk PRD.md
+
+# ---------------------------------------------------------------------------
+# Secrets and credentials — keep .env.example tracked
+# ---------------------------------------------------------------------------
+.env
+.env.local
+.env.*.local
+!.env.example
+*service-account*.json
+*firebase-adminsdk*.json
+
+# ---------------------------------------------------------------------------
+# Node / Vite
+# ---------------------------------------------------------------------------
+node_modules/
+dist/
+build/
+.cache/
+.vite/
+vite.config.*.timestamp-*
+*.tsbuildinfo
+
+# ---------------------------------------------------------------------------
+# Python / backend
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local attachment storage created by the backend
+uploads/
+
+# ---------------------------------------------------------------------------
+# Logs and editor state
+# ---------------------------------------------------------------------------
+*-debug.log*
+logs/
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# ---------------------------------------------------------------------------
+# Tooling scratch state
+# ---------------------------------------------------------------------------
+.claude-replay.*
+.tmp-*
+/.figma/design-context/
+/.plugins/
+/.opencode-skills/
