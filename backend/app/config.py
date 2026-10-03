@@ -37,6 +37,18 @@ class Settings(BaseSettings):
     llm_mode: Literal["live", "mock"] = "mock"
     seed_user_password: SecretStr | None = Field(default=None, min_length=8)
 
+    @field_validator(
+        "groq_api_key",
+        "seed_user_password",
+        "google_application_credentials",
+        mode="before",
+    )
+    @classmethod
+    def blank_optional_values_are_unset(cls, value: object) -> object | None:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
     @field_validator("firebase_project_id")
     @classmethod
     def clean_project_id(cls, value: str | None) -> str | None:

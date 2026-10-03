@@ -17,6 +17,7 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 def _identity_from_claims(claims: dict[str, Any]) -> AuthenticatedUser:
     uid = claims.get("uid") or claims.get("sub")
+    email = claims.get("email")
     role = claims.get("role")
     if role not in {UserRole.CUSTOMER.value, UserRole.STAFF.value}:
         raise AppError(
@@ -24,12 +25,19 @@ def _identity_from_claims(claims: dict[str, Any]) -> AuthenticatedUser:
             "role_required",
             "This account does not have an AccessDesk role.",
         )
+    if not isinstance(uid, str) or not uid or not isinstance(email, str) or not email:
+        raise AppError(
+            status.HTTP_401_UNAUTHORIZED,
+            "invalid_token",
+            "The authentication token is missing required identity claims.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     try:
         return AuthenticatedUser(
             uid=uid,
-            name=claims.get("name") or claims.get("email", "AccessDesk user"),
-            email=claims.get("email"),
+            name=claims.get("name") or email,
+            email=email,
             role=role,
             preferred_language=claims.get(
                 "preferredLanguage", PreferredLanguage.ENGLISH

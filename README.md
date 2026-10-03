@@ -166,7 +166,7 @@ The commands below describe the intended development environment once the backen
 
 ### Prerequisites
 
-- Python 3.11+
+- Python 3.11–3.13 (CrewAI does not currently support Python 3.14)
 - Node.js 20+
 - A Firebase project with Firestore and email/password authentication enabled
 - A Firebase Admin service-account credential
@@ -183,7 +183,7 @@ LLM_MODE=mock
 
 FIREBASE_PROJECT_ID=
 GOOGLE_APPLICATION_CREDENTIALS=
-UPLOAD_DIR=./uploads
+UPLOAD_DIR=./backend/uploads
 CORS_ORIGIN=http://localhost:5173
 
 VITE_FIREBASE_API_KEY=

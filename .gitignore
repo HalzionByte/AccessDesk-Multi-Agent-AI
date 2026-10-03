@@ -7,11 +7,17 @@
 # Secrets and credentials — keep .env.example tracked
 # ---------------------------------------------------------------------------
 .env
-.env.local
-.env.*.local
+.env.*
 !.env.example
 *service-account*.json
+*serviceAccount*.json
 *firebase-adminsdk*.json
+*credentials*.json
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
 
 # ---------------------------------------------------------------------------
 # Node / Vite
@@ -32,25 +38,18 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
-# Secrets and local configuration
-.env
-.env.*
-!.env.example
-*service-account*.json
-*firebase-adminsdk*.json
-credentials*.json
-
-# Python
-__pycache__/
-*.py[cod]
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 .coverage
+coverage.xml
 htmlcov/
 
 # Local attachment storage created by the backend
 uploads/
+*.db
+*.sqlite
+*.sqlite3
 
 # ---------------------------------------------------------------------------
 # Logs and editor state
@@ -71,14 +70,3 @@ Thumbs.db
 /.figma/design-context/
 /.plugins/
 /.opencode-skills/
-.venv/
-venv/
-
-# Runtime data
-uploads/
-
-# Editors and operating systems
-.idea/
-.vscode/
-.DS_Store
-Thumbs.db

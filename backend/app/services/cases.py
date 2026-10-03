@@ -434,7 +434,8 @@ def update_case_status(
     note: str | None = None,
     info_request: str | None = None,
 ) -> SupportCase:
-    if target == CaseStatus.NEEDS_INFORMATION and not (info_request or "").strip():
+    cleaned_info_request = (info_request or "").strip()
+    if target == CaseStatus.NEEDS_INFORMATION and not cleaned_info_request:
         raise AppError(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
             "info_request_required",
@@ -451,7 +452,7 @@ def update_case_status(
             "status": target.value,
             "updatedAt": now,
             "infoRequest": (
-                info_request.strip() if target == CaseStatus.NEEDS_INFORMATION else None
+                cleaned_info_request if target == CaseStatus.NEEDS_INFORMATION else None
             ),
         }
         if note is not None:

@@ -59,15 +59,17 @@ def list_case_events(database: Any, case_id: str) -> list[Event]:
     events: list[Event] = []
     for snapshot in query.stream():
         data = snapshot.to_dict() or {}
+        data.setdefault("eventId", snapshot.id)
+        record = EventRecord.model_validate(data)
         events.append(
             Event(
-                event_id=data.get("eventId", snapshot.id),
-                draft_id=data.get("draftId"),
-                case_id=data.get("caseId"),
-                actor=data.get("actor", "System"),
-                action=data.get("action", "updated case"),
-                outcome=data.get("outcome", "complete"),
-                at=data.get("createdAt"),
+                event_id=record.event_id,
+                draft_id=record.draft_id,
+                case_id=record.case_id,
+                actor=record.actor,
+                action=record.action,
+                outcome=record.outcome,
+                at=record.created_at,
             )
         )
     return events
