@@ -1,18 +1,18 @@
 # AccessDesk Task 10 QA record
 
 Date: 2026-10-03  
-Scope: current `main` working tree, covering implemented Tasks 1-3 and 7-9  
+Scope: current working tree, covering implemented Tasks 1-4 and 7-9
 Test environment: Windows, Python 3.14.5 for the deterministic backend suite,
 Node/Vite frontend build
 
 This report contains measured results only. It does not treat the unimplemented
-Tasks 4-6 agent workflow as passing.
+Tasks 5-6 agent workflow as passing.
 
 ## Automated results
 
 | Check | Measured result |
 | --- | --- |
-| Backend tests | 48 passed |
+| Backend tests | 59 passed |
 | Backend statement coverage | 91% |
 | Ruff | Passed |
 | MyPy application source check | Passed for 21 files; only `firebase_admin.*` missing stubs excluded |
@@ -45,15 +45,16 @@ Tasks 4-6 agent workflow as passing.
 | Metric required by the PRD | Result |
 | --- | --- |
 | Extraction accuracy | Not measured — agent implementation/eval set absent |
-| Missing-item detection | Not measured — checker/eval set absent |
-| Citation validity | Not measured — policy/agent implementation absent |
+| Missing-item detection | Deterministic checker unit-tested; agent evaluation not measured |
+| Citation validity | Policy IDs/corpus validated; agent citation output not measured |
 | Duplicate prevention | Measured: 10/10 concurrent calls returned one case ID |
 | Case creation after confirmation | Measured: confirmed request created one case; unconfirmed request created zero |
 | Model and live evaluation date | Not measured — no live model run performed |
 
 ## Remaining integration gate
 
-Tasks 4-6 must provide policy retrieval, completeness checking, the labelled
-15-complaint evaluation set, the Groq/CrewAI layer, the deterministic stage
-router, and `POST /chat`. Until those pieces are merged, a live end-to-end run,
-AI safety evaluation, and full demo recording would be misleading.
+Tasks 5-6 must provide the Groq/CrewAI layer, evaluation runner, deterministic
+stage router, and `POST /chat`. Task 4 now provides policy retrieval,
+completeness checking, and the labelled 15-complaint corpus. Until the remaining
+pieces are merged, a live end-to-end run, AI safety evaluation, and full demo
+recording would be misleading.

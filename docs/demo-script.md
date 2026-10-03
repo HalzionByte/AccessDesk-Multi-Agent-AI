@@ -46,7 +46,7 @@ Approve. Close the case and point out that illegal actions are never offered.
 
 ## 2:40-3:00 — Architecture and measured results
 
-Close on `AccessDesk-architecture-v3.pptx`. Explain that the browser holds only a
+Close on `AccessDesk-architecture-v4.pptx`. Explain that the browser holds only a
 Firebase identity token, FastAPI owns authorization and deterministic rules,
 agents receive scoped tools, and Firestore/local evidence remain backend-only.
 Quote only the latest measured figures from `qa-report.md`; do not estimate

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import (
     BaseModel,
@@ -176,6 +176,37 @@ class PolicyCitation(AppModel):
     id: NonEmptyText
     title: NonEmptyText
     text: NonEmptyText
+
+
+class MissingRequirement(StrEnum):
+    ORDER = "order"
+    ISSUE_TYPE = "issue_type"
+    DESCRIPTION = "description"
+    IMAGE = "image"
+    REQUESTED_RESOLUTION = "requested_resolution"
+
+
+class CompletenessResult(AppModel):
+    missing: list[MissingRequirement] = Field(default_factory=list)
+    window: Literal["within", "outside"]
+    days_since_delivery: int | None = Field(default=None, ge=0)
+    needs_staff_exception: bool
+
+
+class EvaluationLanguage(StrEnum):
+    ENGLISH = "en"
+    ROMAN_URDU = "roman-urdu"
+    MIXED = "mixed"
+
+
+class EvaluationComplaint(AppModel):
+    id: NonEmptyText
+    language: EvaluationLanguage
+    complaint: NonEmptyText
+    expected_order_id: str | None = None
+    expected_issue_type: str | None = None
+    expected_missing: list[MissingRequirement] = Field(default_factory=list)
+    expected_policy_ids: list[NonEmptyText] = Field(default_factory=list)
 
 
 class ChecklistItem(AppModel):
