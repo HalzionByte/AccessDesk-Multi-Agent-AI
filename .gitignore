@@ -32,6 +32,17 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*service-account*.json
+*firebase-adminsdk*.json
+credentials*.json
+
+# Python
+__pycache__/
+*.py[cod]
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
@@ -60,3 +71,14 @@ Thumbs.db
 /.figma/design-context/
 /.plugins/
 /.opencode-skills/
+.venv/
+venv/
+
+# Runtime data
+uploads/
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
