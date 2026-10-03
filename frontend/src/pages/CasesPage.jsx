@@ -13,7 +13,6 @@ import {
   Textarea,
   Toast,
 } from "../components/ui"
-
 export default function CasesPage() {
   const navigate = useNavigate()
   const [items, setItems] = useState([])
@@ -21,10 +20,10 @@ export default function CasesPage() {
   const [error, setError] = useState("")
   const [replies, setReplies] = useState({})
   const [sending, setSending] = useState("")
+  const [replyErrors, setReplyErrors] = useState({})
   const [toast, setToast] = useState("")
   const [openMenu, setOpenMenu] = useState("")
   const [viewCase, setViewCase] = useState(null)
-
   const load = async () => {
     setLoading(true)
     setError("")
@@ -36,20 +35,31 @@ export default function CasesPage() {
       setLoading(false)
     }
   }
-
   useEffect(() => {
     load()
   }, [])
-
-  const sendReply = (id) => {
+  const sendReply = async (id) => {
+    const message = replies[id]?.trim()
+    if (!message || sending) return
     setSending(id)
-    setTimeout(() => {
+    setReplyErrors((current) => ({ ...current, [id]: "" }))
+    try {
+      const updated = await api.replyToCase(id, message)
+      setItems((current) =>
+        current.map((item) => (item.id === id ? updated : item)),
+      )
       setSending("")
       setReplies((current) => ({ ...current, [id]: "" }))
       setToast("Your reply was added to the case.")
-    }, 500)
+    } catch (requestError) {
+      setReplyErrors((current) => ({
+        ...current,
+        [id]: requestError.message,
+      }))
+    } finally {
+      setSending("")
+    }
   }
-
   return (
     <>
       <PageHeader
@@ -176,6 +186,14 @@ export default function CasesPage() {
                   >
                     Send reply
                   </Button>
+                  {replyErrors[item.id] && (
+                    <div className="mt-3">
+                      <ErrorBanner
+                        message={replyErrors[item.id]}
+                        onRetry={() => sendReply(item.id)}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
             </Card>

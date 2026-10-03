@@ -23,6 +23,7 @@ secrets/
 # Node / Vite
 # ---------------------------------------------------------------------------
 node_modules/
+.pnpm-store/
 dist/
 build/
 .cache/
@@ -67,6 +68,7 @@ Thumbs.db
 # ---------------------------------------------------------------------------
 .claude-replay.*
 .tmp-*
+/.codex-finalizer/
 /.figma/design-context/
 /.plugins/
 /.opencode-skills/

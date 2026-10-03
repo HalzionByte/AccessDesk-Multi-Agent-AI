@@ -1,41 +1,64 @@
-# figma-make-app
+# AccessDesk development guide
 
-React + Vite + Tailwind CSS project running inside Figma Make.
+AccessDesk is a FastAPI backend with a React 19, Vite and Tailwind CSS v4
+frontend. The repository root is the shared configuration and documentation
+location.
 
-## Development Server
+## Project structure
 
-A Vite development server is **already running** on `$PORT` (default 8443). You don't need to start it manually.
+- `backend/app/main.py` - FastAPI application entry point.
+- `backend/app/routers/` - authenticated HTTP routes.
+- `backend/app/services/` - deterministic domain and Firestore operations.
+- `backend/app/schemas.py` - shared API and persistence models.
+- `backend/tests/` - backend unit and integration-style tests.
+- `frontend/src/main.jsx` - React entry point.
+- `frontend/src/app/App.jsx` - provider and router composition.
+- `frontend/src/app/routes.jsx` - role-aware application routes.
+- `frontend/src/api/client.js` - mock/live API boundary.
+- `frontend/src/components/` - shared UI and workflow components.
+- `frontend/src/pages/` - customer and staff screens.
+- `frontend/src/mocks/` - fictional demo fixtures.
 
-- Preview URL: The user can access the running app through the preview panel
-- Hot reload: Changes to source files are reflected immediately
+## Local commands
 
-## Project Structure
+Backend commands run from `backend/`:
 
-This is the canonical project structure. Start with task-relevant files below. Only follow imports or inspect other files when required, when a documented path is missing, or when the repository contradicts this guide.
+```text
+python -m pytest
+python -m ruff check app tests seed.py
+python -m mypy app seed.py --ignore-missing-imports
+```
 
-- `src/main.tsx` - React entrypoint; imports `src/index.css` and mounts `src/App.tsx` into the `#root` element
-- `src/App.tsx` - Primary application component and the usual starting point for UI work
-- `src/index.css` - Global CSS entrypoint and Tailwind CSS v4 import
-- `index.html` - Vite HTML shell containing the `#root` element and loading `src/main.tsx`
-- `package.json` - Project dependencies and the Vite build, development, preview, and formatting scripts
-- `vite.config.ts` - Vite configuration with React, Tailwind CSS v4, and Figma Make plugins plus the `@` alias for `src`
-- `.mise.toml` - Toolchain versions for Node.js and pnpm
+Frontend commands run from `frontend/`:
 
-## Dependencies
+```text
+pnpm install --frozen-lockfile
+pnpm test
+pnpm exec tsc --noEmit
+pnpm build
+pnpm format
+```
 
-- Runtime: React 19 and React DOM 19
-- Styling: Tailwind CSS v4 with the `@tailwindcss/vite` plugin
-- Build tooling: Vite 8, TypeScript 5.7, and `@vitejs/plugin-react`
-- Formatting: oxfmt
+The backend uses port 8000 and the Vite frontend uses port 5173. Vite loads
+the shared repository-root `.env` through `frontend/vite.config.ts`.
 
-## Styling
+## Frontend conventions
 
-This project uses **Tailwind CSS v4** through the `@tailwindcss/vite` plugin configured in `vite.config.ts`. `src/index.css` imports Tailwind with `@import 'tailwindcss';`. Use Tailwind utility classes directly in JSX and put global CSS or Tailwind v4 theme customization in `src/index.css`. This scaffold does not need a Tailwind config file or PostCSS config.
+- Use the existing components in `frontend/src/components/ui/` and
+  `frontend/src/components/shared/` before adding another primitive.
+- Keep mock and live behavior behind `frontend/src/api/client.js`; screens
+  should not contain alternate endpoint definitions.
+- Use Firebase only for browser authentication. All application data travels
+  through authenticated FastAPI endpoints.
+- Keep short customer-facing copy, sentence case and accessible labels.
+- Run Oxfmt using the committed `frontend/.oxfmtrc.json` configuration.
+- Every data screen needs loading, empty and retryable error states.
 
-`src/main.tsx` imports `src/index.css`, so global font wiring belongs in `src/index.css`. Keep CSS `@import` statements first, then add any `@font-face` rules and font-family defaults there.
+## Security and scope
 
-## Code quality
-
-- Use double quotes for strings containing apostrophes (`"We're here to help"`), or escape them in single-quoted strings. An unescaped apostrophe in a single-quoted string breaks the build.
-- Ensure JSX tags are closed and braces are balanced.
-- Export components as default exports.
+- Never commit `.env`, Firebase service-account files, API keys or tokens.
+- Treat model output as untrusted and validate it at deterministic service
+  boundaries.
+- Preserve role and ownership checks in backend routes and services.
+- Do not implement another task's unfinished feature merely to bypass a
+  missing dependency; document the dependency instead.

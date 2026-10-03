@@ -21,7 +21,6 @@ import {
   Textarea,
   Toast,
 } from "../components/ui"
-
 const statuses = [
   "Draft",
   "Submitted",
@@ -38,7 +37,6 @@ const events = [
     outcome: "Policy P-3 checked",
   },
 ]
-
 export default function ComponentsPage() {
   const [toast, setToast] = useState("")
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -72,6 +70,7 @@ export default function ComponentsPage() {
           <div className="space-y-4">
             <Input label="Email" placeholder="you@example.com" />
             <Input label="Order" error="Enter an order number." />
+            <Input label="Disabled field" value="Unavailable" disabled />
             <Select label="Resolution">
               <option>Replacement</option>
               <option>Refund</option>
@@ -130,9 +129,15 @@ export default function ComponentsPage() {
               message="The request could not load. Check your connection and try again."
               onRetry={() => setToast("Retry started")}
             />
+            <ErrorBanner message="This action is currently unavailable." />
             <EmptyState
               title="Nothing here yet"
               description="New items will appear here."
+            />
+            <EmptyState
+              title="No requests yet"
+              description="Start a request when you need support."
+              action={<Button>Start request</Button>}
             />
             <Button
               variant="secondary"

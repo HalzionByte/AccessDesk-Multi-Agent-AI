@@ -1,0 +1,38 @@
+================================================================================
+TASK 9 - STAFF DASHBOARD
+Implementation status: COMPLETE
+================================================================================
+
+Source of truth: AccessDesk PRD section T9.
+
+Completed staff experience
+--------------------------
+[x] Staff-only case table backed by GET /staff/cases.
+[x] Server-backed status filter and client-side tracking/order/product/issue
+    search.
+[x] Case detail review backed by GET /staff/cases/{caseId}.
+[x] AI summary, customer statement, authorized evidence downloads, policy
+    references, and the combined agent/staff event timeline.
+[x] Optional internal staff note and required text for information requests.
+[x] Only legal next states are rendered:
+    Submitted -> Under Review
+    Under Review -> Needs Information | Approved | Declined
+    Approved | Declined -> Closed
+[x] Approve and Decline require a confirmation dialog.
+[x] Status changes use PATCH /staff/cases/{caseId}/status, then refresh both the
+    list and case detail/timeline from the API.
+[x] Loading, empty, no-search-results, API-error, action-error, and success
+    states are present.
+[x] Mock mode implements the same staff client methods as live mode.
+[x] Evidence files are fetched with the authenticated API client; storage paths
+    are never exposed to the browser.
+
+Automated verification
+----------------------
+- Staff transition/search helper tests: passed.
+- Frontend unit tests: 5 passed.
+- TypeScript --noEmit: passed.
+- Vite production build: passed.
+- Backend case lifecycle and staff authorization tests: passed as part of the
+  48-test backend suite.
+================================================================================

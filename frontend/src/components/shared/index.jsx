@@ -105,11 +105,11 @@ export function Checklist({ items }) {
   )
 }
 
-export function Timeline({ events }) {
+export function Timeline({ events, title = "Agent activity" }) {
   return (
     <Card>
       <p className="mb-4 font-semibold text-slate-900 dark:text-stone-100">
-        Agent activity
+        {title}
       </p>
       <ol className="space-y-0">
         {events.map((event, index) => (

@@ -1,4 +1,4 @@
-import { forwardRef, useEffect } from "react"
+import { forwardRef, useEffect, useId } from "react"
 
 export function Spinner({ className = "" }) {
   return (
@@ -206,6 +206,8 @@ export function Dialog({
   onClose,
   actions,
 }) {
+  const titleId = useId()
+  const descriptionId = useId()
   useEffect(() => {
     if (!open) return
     const onKeyDown = (event) => {
@@ -228,21 +230,21 @@ export function Dialog({
       <section
         role="dialog"
         aria-modal="true"
-        aria-labelledby="dialog-title"
-        aria-describedby={description ? "dialog-description" : undefined}
+        aria-labelledby={titleId}
+        aria-describedby={description ? descriptionId : undefined}
         className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-xl border border-slate-200 bg-white p-5 shadow-xl dark:border-stone-700 dark:bg-stone-800 dark:shadow-none"
       >
         <div className="flex items-start justify-between gap-4">
           <div>
             <p
-              id="dialog-title"
+              id={titleId}
               className="text-lg font-semibold text-slate-900 dark:text-stone-100"
             >
               {title}
             </p>
             {description && (
               <p
-                id="dialog-description"
+                id={descriptionId}
                 className="mt-1 text-sm text-slate-600 dark:text-stone-400"
               >
                 {description}

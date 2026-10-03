@@ -276,7 +276,14 @@ python eval/run_eval.py
 
 ## Current project status
 
-This repository currently contains the product requirements and this project README. The application structure, commands, features, and evaluation workflow above describe the planned hackathon implementation; they should not be treated as verified until the corresponding code and measured test results are added.
+Tasks 1–3 and 7–9 are implemented. The backend provides authenticated identity,
+orders, drafts, attachments and customer case workflows. The frontend provides
+Firebase authentication with a mock-mode fallback, the shared design system,
+the customer support experience, My Cases, and the staff review dashboard.
+Task 10 QA and demo assets cover the implemented system, but its live AI
+integration and evaluation remain blocked by missing Tasks 4–6; in particular,
+live support chat requires the Task 6 `POST /chat` endpoint. See `Task 7.txt`
+through `Task 10.txt` and `docs/qa-report.md` for verification notes.
 
 ## Limitations
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router"
-import { api } from "../api/client"
+import { api, isMockMode } from "../api/client"
 import {
   ChatBubble,
   Checklist,
@@ -18,18 +18,17 @@ import {
   StatusBadge,
   Toast,
 } from "../components/ui"
-
 const scenarios = [
   { id: "complete", label: "S1 Complete" },
   { id: "incomplete", label: "S1 Incomplete" },
   { id: "repeat", label: "S3 Repeat" },
   { id: "late", label: "S4 Late" },
 ]
-
 export default function SupportPage() {
   const navigate = useNavigate()
   const fileRef = useRef(null)
   const chatRef = useRef(null)
+  const submissionKeyRef = useRef("")
   const [scenario, setScenario] = useState("complete")
   const [data, setData] = useState(null)
   const [orders, setOrders] = useState([])
@@ -43,21 +42,26 @@ export default function SupportPage() {
   const [toast, setToast] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [trackingNo, setTrackingNo] = useState("")
-
+  const [lastMessage, setLastMessage] = useState("")
   const loadScenario = async (nextScenario = scenario) => {
     setBusy(true)
     setError("")
     setTrackingNo("")
+    setLastMessage("")
+    submissionKeyRef.current = ""
     try {
-      const [response, orderList] = await Promise.all([
-        api.getChat(nextScenario),
-        api.getOrders(),
-      ])
+      const orderList = await api.getOrders()
+      const response = isMockMode ? await api.getScenario(nextScenario) : null
       setData(response)
       setOrders(orderList)
-      setOrderId(response.fields.orderId || orderList[0]?.id || "")
+      setOrderId(
+        response?.preview?.orderId ||
+          response?.fields?.orderId ||
+          orderList[0]?.id ||
+          "",
+      )
       setMessages(
-        response.reply
+        response?.reply
           ? [
               {
                 role: "assistant",
@@ -68,8 +72,15 @@ export default function SupportPage() {
           : [],
       )
       setFiles(
-        response.preview?.attachments?.map((name) => ({ name, demo: true })) ||
-          [],
+        response?.preview?.attachments?.map((attachment) => ({
+          name:
+            typeof attachment === "string" ? attachment : attachment.filename,
+          attachmentId:
+            typeof attachment === "string"
+              ? undefined
+              : attachment.attachmentId,
+          demo: isMockMode,
+        })) || [],
       )
     } catch (requestError) {
       setError(
@@ -81,31 +92,34 @@ export default function SupportPage() {
       setBusy(false)
     }
   }
-
   useEffect(() => {
     loadScenario(scenario)
   }, [scenario])
-
   // Keep the newest message in view without letting the transcript grow the
   // page, so the composer below it stays at a fixed position.
   useEffect(() => {
     const node = chatRef.current
     if (node) node.scrollTop = node.scrollHeight
   }, [messages, busy, error])
-
-  const sendMessage = async (event) => {
-    event.preventDefault()
-    if (!message.trim() || busy) return
-    const userText = message.trim()
-    setMessages((current) => [...current, { role: "user", text: userText }])
-    setMessage("")
+  const runChat = async (userText, appendUser = true) => {
+    if (!userText || busy) return
+    if (appendUser) {
+      setMessages((current) => [...current, { role: "user", text: userText }])
+      setMessage("")
+    }
+    setLastMessage(userText)
     setBusy(true)
     setError("")
     try {
-      const response = await api.sendChat(
-        userText.toLowerCase().includes("busy") ? "busy" : scenario,
-        userText,
-      )
+      const response = await api.sendChat({
+        draftId: data?.draftId,
+        orderId,
+        message: userText,
+        scenario:
+          isMockMode && userText.toLowerCase().includes("busy")
+            ? "busy"
+            : scenario,
+      })
       setData(response)
       setMessages((current) => [
         ...current,
@@ -125,7 +139,10 @@ export default function SupportPage() {
       setBusy(false)
     }
   }
-
+  const sendMessage = async (event) => {
+    event.preventDefault()
+    await runChat(message.trim())
+  }
   const addFiles = (event) => {
     const selected = Array.from(event.target.files || [])
     setFileError("")
@@ -144,19 +161,30 @@ export default function SupportPage() {
     setFiles((current) => [...current, ...selected])
     event.target.value = ""
   }
-
   const submit = async () => {
-    if (submitting || trackingNo) return
+    if (submitting || trackingNo || !data?.draftId) return
     setSubmitting(true)
     setError("")
     try {
-      const key = crypto.randomUUID()
+      const uploadedFiles = [...files]
+      for (const [index, file] of files.entries()) {
+        if (file instanceof File && !file.demo && !file.attachmentId) {
+          const attachment = await api.uploadAttachment(data.draftId, file)
+          uploadedFiles[index] = {
+            ...attachment,
+            name: attachment.filename,
+          }
+          setFiles([...uploadedFiles])
+        }
+      }
+      const key = submissionKeyRef.current || crypto.randomUUID()
+      submissionKeyRef.current = key
       const result = await api.submitCase(data.draftId, key)
       setTrackingNo(result.trackingNo)
       setData((current) => ({
         ...current,
         events: [
-          ...current.events,
+          ...(current?.events || []),
           {
             actor: "customer",
             action: "Customer confirmed submission",
@@ -177,17 +205,15 @@ export default function SupportPage() {
       setSubmitting(false)
     }
   }
-
   const visibleChecklist =
     data?.checklist?.map((item) =>
       item.key === "photo" ? { ...item, done: files.length > 0 } : item,
     ) || []
-  const complete = visibleChecklist.every((item) => item.done)
-
+  const complete =
+    visibleChecklist.length > 0 && visibleChecklist.every((item) => item.done)
   // A damaged-product report needs an order to attach it to, so an account
   // with no orders cannot start a draft.
   const noOrders = !busy && !error && orders.length === 0
-
   return (
     <>
       <PageHeader
@@ -219,23 +245,23 @@ export default function SupportPage() {
                   </option>
                 ))}
               </Select>
-
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-stone-400">
-                  Mock scenario
-                </span>
-                {scenarios.map((item) => (
-                  <Button
-                    key={item.id}
-                    variant={scenario === item.id ? "primary" : "secondary"}
-                    className="min-h-9 px-3 py-1.5"
-                    onClick={() => setScenario(item.id)}
-                  >
-                    {item.label}
-                  </Button>
-                ))}
-              </div>
-
+              {isMockMode && (
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-stone-400">
+                    Mock scenario
+                  </span>
+                  {scenarios.map((item) => (
+                    <Button
+                      key={item.id}
+                      variant={scenario === item.id ? "primary" : "secondary"}
+                      className="min-h-9 px-3 py-1.5"
+                      onClick={() => setScenario(item.id)}
+                    >
+                      {item.label}
+                    </Button>
+                  ))}
+                </div>
+              )}
               <div className="my-3 h-px bg-slate-200 dark:bg-stone-700" />
               <div
                 ref={chatRef}
@@ -270,7 +296,11 @@ export default function SupportPage() {
                 {error && (
                   <ErrorBanner
                     message={error}
-                    onRetry={() => loadScenario(scenario)}
+                    onRetry={() =>
+                      isMockMode || !lastMessage
+                        ? loadScenario(scenario)
+                        : runChat(lastMessage, false)
+                    }
                   />
                 )}
               </div>
@@ -287,13 +317,14 @@ export default function SupportPage() {
                   Send
                 </Button>
               </form>
-              <p className="mt-2 text-xs text-slate-500 dark:text-stone-500">
-                Demo tip: send “busy” to preview the saved-draft retry state.
-              </p>
+              {isMockMode && (
+                <p className="mt-2 text-xs text-slate-500 dark:text-stone-500">
+                  Demo tip: send “busy” to preview the saved-draft retry state.
+                </p>
+              )}
             </Card>
           )}
         </div>
-
         <div className="space-y-6 lg:sticky lg:top-24 lg:self-start">
           {data && !noOrders && (
             <>
@@ -356,14 +387,12 @@ export default function SupportPage() {
                   )}
                 </div>
               </Card>
-
-              {scenario === "late" && (
+              {data.preview?.window?.toLowerCase().includes("past") && (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-200">
                   This order is past the 7-day window. Staff will review it.
                   Approval is not guaranteed.
                 </div>
               )}
-
               {data.existingCase && (
                 <Card>
                   <p className="text-sm font-medium text-slate-500 dark:text-stone-400">
@@ -384,7 +413,6 @@ export default function SupportPage() {
                   </Button>
                 </Card>
               )}
-
               {complete && data.preview && !trackingNo && (
                 <Card>
                   <p className="text-lg font-semibold">Request preview</p>
@@ -430,7 +458,6 @@ export default function SupportPage() {
                   </p>
                 </Card>
               )}
-
               {trackingNo && (
                 <Card className="border-emerald-200 dark:border-emerald-400/30">
                   <div className="flex size-10 items-center justify-center rounded-full bg-emerald-100 font-bold text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300">
@@ -454,7 +481,6 @@ export default function SupportPage() {
                   </Button>
                 </Card>
               )}
-
               <Timeline events={data.events} />
             </>
           )}

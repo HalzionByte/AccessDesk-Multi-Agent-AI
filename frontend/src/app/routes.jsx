@@ -1,14 +1,20 @@
 import { Navigate, createBrowserRouter } from "react-router"
 import { useAuth } from "../context/AuthContext"
 import AppShell from "../components/shared/AppShell"
+import { Spinner } from "../components/ui"
 import CasesPage from "../pages/CasesPage"
 import ComponentsPage from "../pages/ComponentsPage"
 import LoginPage from "../pages/LoginPage"
 import StaffPage from "../pages/StaffPage"
 import SupportPage from "../pages/SupportPage"
-
 function Guard({ role, children }) {
   const auth = useAuth()
+  if (auth.initializing)
+    return (
+      <div className="flex min-h-48 items-center justify-center">
+        <Spinner className="size-6" />
+      </div>
+    )
   if (!auth.role) return <Navigate to="/login" replace />
   if (auth.role !== role)
     return (
@@ -16,9 +22,14 @@ function Guard({ role, children }) {
     )
   return children
 }
-
 function Home() {
-  const { role } = useAuth()
+  const { initializing, role } = useAuth()
+  if (initializing)
+    return (
+      <div className="flex min-h-48 items-center justify-center">
+        <Spinner className="size-6" />
+      </div>
+    )
   return (
     <Navigate
       to={
@@ -32,7 +43,6 @@ function Home() {
     />
   )
 }
-
 export const router = createBrowserRouter([
   {
     path: "/",

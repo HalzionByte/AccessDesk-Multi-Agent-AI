@@ -162,7 +162,16 @@ export const cases = [
     issue: "Damaged on arrival",
     summary: "Left ear cup cracked during delivery.",
     statement: "The left ear cup is cracked and the headband is bent.",
-    evidence: ["damage-front.jpg"],
+    attachments: [
+      {
+        attachmentId: "attachment-1000",
+        filename: "damage-front.jpg",
+        mime: "image/jpeg",
+        size: 184320,
+      },
+    ],
+    policyRefs: ["P-3"],
+    events: baseEvents,
     resolution: "Replacement",
     submittedAt: "20 February 2026",
     status: "Under Review",
@@ -175,7 +184,24 @@ export const cases = [
     issue: "Damaged on arrival",
     summary: "Speaker casing split near charging port.",
     statement: "The speaker casing is split near the charging port.",
-    evidence: ["speaker-damage.png"],
+    attachments: [
+      {
+        attachmentId: "attachment-1001",
+        filename: "speaker-damage.png",
+        mime: "image/png",
+        size: 245760,
+      },
+    ],
+    policyRefs: ["P-3"],
+    events: [
+      ...baseEvents,
+      {
+        actor: "Staff",
+        action: "requested more information",
+        outcome: "Full product and packaging photo requested",
+        at: "2026-02-21T09:15:00Z",
+      },
+    ],
     resolution: "Replacement",
     submittedAt: "12 February 2026",
     status: "Needs Information",

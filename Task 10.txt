@@ -1,0 +1,37 @@
+================================================================================
+TASK 10 - INTEGRATION, EVALUATION, QA AND DEMO
+Implementation status: PARTIAL - BLOCKED BY TASKS 4-6
+================================================================================
+
+Completed in the current repository state
+-----------------------------------------
+[x] Tasks 1-3 and 7-9 contracts reviewed and exercised together.
+[x] Backend tests run with coverage; deterministic authorization, ownership,
+    file validation, case creation, duplicate prevention, idempotency, and staff
+    status rules are covered.
+[x] Frontend unit tests, formatting, type checking, and production build run.
+[x] Measured QA report added at docs/qa-report.md.
+[x] Three-minute demo runbook added at docs/demo-script.md.
+[x] Editable architecture slide added at docs/AccessDesk-architecture-v3.pptx.
+[x] README setup, status, API list, architecture, and limitations updated.
+
+Intentionally not claimed as complete
+-------------------------------------
+[ ] Live VITE_USE_MOCKS=false + LLM_MODE=live integration cannot run because
+    Tasks 4-6 (policy/checker, LLM agents, workflow router, POST /chat, and the
+    labelled evaluation corpus) are absent from the current main branch.
+[ ] Extraction accuracy, missing-item detection, citation validity, Roman Urdu,
+    prompt-injection resistance, model identity, and live evaluation date are
+    therefore not measured. No estimated results were substituted.
+[ ] A truthful backup video of the full S1-S4 live flow is deferred until the
+    missing chat/agent implementation lands. The runbook is ready for recording.
+
+Re-run after Tasks 4-6 are merged
+---------------------------------
+1. Configure real Firebase and Groq credentials outside Git.
+2. Start backend with LLM_MODE=live and frontend with VITE_USE_MOCKS=false.
+3. Run backend/eval/run_eval.py supplied by Task 4/5 and record its measured
+   model, date, and metrics in docs/qa-report.md.
+4. Execute S1-S4 and the staff lifecycle from docs/demo-script.md.
+5. Record the backup demo video only after the real path passes.
+================================================================================
