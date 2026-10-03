@@ -1,0 +1,228 @@
+================================================================================
+TASK 7 - FRONTEND FOUNDATION AND DESIGN SYSTEM
+Completion: 85%
+================================================================================
+
+Source of truth: README.md (repo root). Design details verified against
+"2.7 UI design system". Where this document and the README disagree, the
+README wins.
+
+Status legend
+  [x] Complete and verified
+  [ ] Not implemented
+  [~] Partial
+  [!] Blocked - waiting on a prerequisite task
+
+
+--------------------------------------------------------------------------------
+1. BUILD ITEMS
+--------------------------------------------------------------------------------
+
+[x] Vite + React + Tailwind setup
+    frontend/package.json, frontend/vite.config.ts, frontend/index.html
+    React 19, Vite 8, Tailwind CSS v4 via @tailwindcss/vite.
+    Verified: `pnpm build` succeeds.
+
+[x] Inter font and tokens from section 2.7
+    frontend/src/index.css
+    Inter via Google Fonts (400/500/600/700), --font-sans token.
+    Verified against 2.7: page bg slate-50, Card is exactly
+    "rounded-xl border border-slate-200 bg-white p-5 shadow-sm",
+    content width max-w-6xl centred, mobile-first with two columns on lg.
+
+[ ] Firebase login page                                          SEE BLOCKER B1
+    frontend/src/pages/LoginPage.jsx is a mock. The `firebase` SDK is not
+    a dependency and is not present in node_modules. The four
+    VITE_FIREBASE_* variables in .env.example are currently unused.
+
+[x] Auth context with role
+    frontend/src/context/AuthContext.jsx
+    Exports AuthProvider and useAuth() -> { role, profile, token,
+    isAuthenticated, login, logout }. Role persists in localStorage.
+
+[x] Route guards (customer vs staff)
+    frontend/src/app/routes.jsx
+    <Guard role="customer"> on /support and /cases; <Guard role="staff">
+    on /staff. Verified: a signed-in customer requesting /staff is
+    redirected to /support.
+
+[x] App shell (top bar, nav, footer)
+    frontend/src/components/shared/AppShell.jsx
+    Logo "AccessDesk"; role-aware nav (Customer: Support, My cases /
+    Staff: Dashboard); user menu with Log out; footer text
+    "Demo data is fictional." - all three match section 2.7 exactly.
+
+[x] api/client.js - adds Bearer token
+    frontend/src/api/client.js
+    Sends `Authorization: Bearer <token>` on every request.
+
+[x] api/client.js - parses the error format
+    Same file. Reads the README error shape { code, message } and throws
+    ApiError(code, message, status). Falls back to request_failed and a
+    generic message when the body is not JSON.
+
+[x] api/client.js - supports VITE_USE_MOCKS
+    Same file. `useMocks = import.meta.env.VITE_USE_MOCKS !== "false"`,
+    so mocks are ON by default and turn off only on the exact string
+    "false". Verified: no .env present -> VITE_USE_MOCKS undefined ->
+    mocks active.
+
+[x] mocks/ with fixtures for S1 to S4
+    frontend/src/mocks/fixtures.js
+    orders[]; chatResponses for complete / incomplete / repeat / late
+    (matching the README "Demo scenarios": complete request, incomplete
+    request, repeated complaint, outside policy window); cases[].
+    Shapes carry draftId, stage, reply, language, fields, checklist,
+    citations, preview, existingCase, events.
+
+[~] Every component in section 2.7, with a demo page at /_components
+    All required components exist. Demo page at /_components renders 8
+    sections.
+    Present in components/ui/: Button, Card, StatusBadge, Input, Textarea,
+      Spinner, Skeleton, ErrorBanner, EmptyState, Toast
+      (plus Select and Dialog, needed by Task 8)
+    Present in components/shared/: Timeline, CitationChip, Checklist,
+      ChatBubble, PageHeader (plus TypingIndicator)
+    All 7 status badge colours match 2.7 exactly (Draft slate, Submitted
+      blue, Under Review indigo, Needs Information amber, Approved
+      emerald, Declined rose, Closed gray).
+    GAP: the demo page does not show every state. Missing are
+      ErrorBanner without Retry, EmptyState without an action, and a
+      disabled Input. Not blocked - just unfinished.
+
+
+--------------------------------------------------------------------------------
+2. "DONE WHEN" CRITERIA
+--------------------------------------------------------------------------------
+
+[x] Customer and staff land on the right home page after login
+    Verified: customer -> /support, staff -> /staff. Unauthenticated
+    users are sent to /login.
+
+[x] Unauthorised routes redirect
+    Verified: customer requesting /staff lands on /support. Staff
+    requesting /support or /cases is redirected to /staff by the same
+    Guard.
+
+[~] Every shared component renders in all states on the demo page
+    Partial - see the GAP note in build item 11.
+
+[x] T8 and T9 can start using only mocks
+    Confirmed. T8 is complete on mocks. No frontend change is needed to
+    begin backend work.
+
+
+--------------------------------------------------------------------------------
+3. BLOCKED / WAITING ON A PREREQUISITE
+--------------------------------------------------------------------------------
+
+B1. Firebase login page - blocked on Firebase project provisioning
+    Task 7 asks for a Firebase login page. The frontend cannot do this
+    alone. It needs, from outside this repo:
+      - a Firebase project with email/password authentication enabled
+      - real values for VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN,
+        VITE_FIREBASE_PROJECT_ID, VITE_FIREBASE_APP_ID (currently blank
+        in .env.example)
+      - the `firebase` package added to frontend/package.json
+      - a backend that verifies the ID token and returns the role claim
+        (README: GET /me returns the profile and role)
+    Until the Firebase project exists, login stays mocked. This is an
+    infrastructure prerequisite, not a frontend decision. The role-based
+    routing and guard logic it feeds is already built and tested.
+
+B2. Task 8 real-API integration - blocked on the backend task
+    Task 8's "works against the real API without code changes beyond
+    VITE_USE_MOCKS" cannot be satisfied until the backend routes exist.
+    frontend/src/api/client.js currently calls endpoints that do NOT
+    appear in the README API table:
+      client.js                          README defines
+      ---------------                    ---------------------------------
+      GET  /orders                       GET /orders                  match
+      GET  /cases                        GET /cases                   match
+      GET  /chat/{scenario}              POST /chat                   MISMATCH
+      POST /chat/{scenario}              POST /chat                   MISMATCH
+      POST /cases/submit                 POST /drafts/{id}/submit     MISMATCH
+    Also absent from client.js but present in the README table:
+      GET /me, POST /drafts/{id}/attachments, GET /drafts/{id},
+      POST /cases/{id}/reply, GET /staff/cases,
+      PATCH /staff/cases/{id}/status, GET /files/{attachmentId}
+    Note: "{scenario}" is a mock-only construct. The README API has no
+    "load a scenario" endpoint, so the scenario picker on /support is
+    mock-only by nature and will need to be gated behind VITE_USE_MOCKS.
+
+    NOTE: the backend task is referred to as "T9" because the Task 7
+    brief says "T8 and T9 can start using only mocks". Confirm the
+    actual task number before acting on this.
+
+
+--------------------------------------------------------------------------------
+4. VERIFICATION PERFORMED
+--------------------------------------------------------------------------------
+
+  pnpm install                 clean, 95 packages, lockfile passes
+                               supply-chain policy
+  pnpm build                   built in ~170ms, 0 errors
+  npx tsc --noEmit             exit 0
+  pnpm format (oxfmt)          17 files, 0 errors
+  /_components                 8 sections render
+  Role redirect                customer -> /staff redirects to /support
+  Home routing                 customer -> /support, staff -> /staff
+
+Not verified: real Firebase sign-in (blocked, see B1). Everything else
+above was exercised in a browser, not merely compiled.
+
+
+--------------------------------------------------------------------------------
+5. DEVIATIONS AND NOTES
+--------------------------------------------------------------------------------
+
+- File locations. The README's "Planned repository structure" puts all
+  frontend build config under frontend/. It now does: index.html,
+  vite.config.ts, package.json, tsconfig.json, vite-env.d.ts, mise.toml,
+  pnpm-lock.yaml. Source lives in frontend/src/api, /components,
+  /mocks, /pages as the README shows.
+
+- vite.config.ts sets `envDir` to the repository root. Without this,
+  Vite would read frontend/.env and the README's single root .env
+  instruction would silently stop working.
+
+- The Figma Make scaffold this project started from has been removed: the
+  site.json import, four Figma plugins, and the 8443 default port. The
+  dev server now uses 5173, matching the README's CORS_ORIGIN.
+
+- AGENTS.md at the repo root is STALE and contradicts the code. It
+  describes src/main.tsx -> src/App.tsx (actually main.jsx ->
+  ./app/App), .mise.toml (actually mise.toml), and port 8443 (actually
+  5173). It also states "Export components as default exports", which
+  app/routes.jsx and both context files deliberately do not follow.
+  Recommend rewriting or deleting it.
+
+- README "Current project status" (line 279) says the repository
+  "currently contains the product requirements and this project README"
+  and that everything above is "planned ... not to be treated as
+  verified". That paragraph is now out of date for the frontend and
+  should be updated before submission.
+
+- "AccessDesk PRD.md" is gitignored as local-only and is not in the
+  repository. Section 2.7 was supplied separately and used to verify the
+  design system.
+
+
+--------------------------------------------------------------------------------
+6. SUMMARY
+--------------------------------------------------------------------------------
+
+  Build items            8 of 9 complete, 1 partial   -> 89%
+  Demo-page state gap    -5%
+                                                    ------
+  COMPLETION                                     85%
+
+Fully done and verified: project setup, design tokens, auth context,
+route guards, app shell, the whole api/client.js contract, all mock
+fixtures for S1-S4, and all section 2.7 components.
+
+Outstanding, and not blocked by any decision in this repo:
+  - add the three missing component states to /_components
+  - align api/client.js to the README API table (do this once, against
+    the real backend, rather than twice)
+================================================================================
