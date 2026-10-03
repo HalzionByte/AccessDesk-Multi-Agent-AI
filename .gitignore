@@ -1,2 +1,30 @@
 # Product requirements document (local only)
 /AccessDesk PRD.md
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*service-account*.json
+*firebase-adminsdk*.json
+credentials*.json
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+
+# Runtime data
+uploads/
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
