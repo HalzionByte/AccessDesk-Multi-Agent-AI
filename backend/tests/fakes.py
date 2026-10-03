@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from itertools import count
+from threading import RLock
 from typing import Any
 
 
@@ -106,6 +107,9 @@ class FakeTransaction:
     def update(self, reference: FakeDocumentReference, data: dict[str, Any]) -> None:
         reference.update(data)
 
+    def delete(self, reference: FakeDocumentReference) -> None:
+        reference.delete()
+
     def commit(self) -> None:
         return None
 
@@ -114,12 +118,17 @@ class FakeFirestore:
     def __init__(self):
         self.documents: dict[tuple[str, ...], dict[str, Any]] = {}
         self.identifiers = count(1)
+        self._transaction_lock = RLock()
 
     def collection(self, name: str) -> FakeCollection:
         return FakeCollection(self, (name,))
 
     def transaction(self) -> FakeTransaction:
         return FakeTransaction()
+
+    def run_transaction(self, operation):
+        with self._transaction_lock:
+            return operation(FakeTransaction())
 
     def put(self, collection: str, document_id: str, data: dict[str, Any]) -> None:
         self.collection(collection).document(document_id).set(data)

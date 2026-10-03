@@ -7,7 +7,7 @@ from typing import Any
 
 from google.cloud.firestore_v1.base_query import FieldFilter
 
-from app.schemas import EventRecord
+from app.schemas import Event, EventRecord
 
 
 def log_event(
@@ -47,4 +47,27 @@ def list_draft_events(database: Any, draft_id: str) -> list[EventRecord]:
         data = snapshot.to_dict() or {}
         data.setdefault("eventId", snapshot.id)
         events.append(EventRecord.model_validate(data))
+    return events
+
+
+def list_case_events(database: Any, case_id: str) -> list[Event]:
+    query = (
+        database.collection("events")
+        .where(filter=FieldFilter("caseId", "==", case_id))
+        .order_by("createdAt")
+    )
+    events: list[Event] = []
+    for snapshot in query.stream():
+        data = snapshot.to_dict() or {}
+        events.append(
+            Event(
+                event_id=data.get("eventId", snapshot.id),
+                draft_id=data.get("draftId"),
+                case_id=data.get("caseId"),
+                actor=data.get("actor", "System"),
+                action=data.get("action", "updated case"),
+                outcome=data.get("outcome", "complete"),
+                at=data.get("createdAt"),
+            )
+        )
     return events

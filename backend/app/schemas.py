@@ -10,7 +10,14 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    StrictBool,
+    StringConstraints,
+)
 from pydantic.alias_generators import to_camel
 
 NonEmptyText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
@@ -147,6 +154,7 @@ class EventRecord(AppModel):
     draft_id: str | None = None
     case_id: str | None = None
     actor: NonEmptyText
+    actor_uid: str | None = None
     action: NonEmptyText
     outcome: NonEmptyText
     created_at: datetime
@@ -230,11 +238,12 @@ class SupportCase(AppModel):
     created_at: datetime
     updated_at: datetime
     events: list[Event] | None = None
+    fictional: bool = True
 
 
 class SubmissionRequest(AppModel):
     idempotency_key: str = Field(min_length=8, max_length=200)
-    confirmed: bool
+    confirmed: StrictBool
 
 
 class CaseReplyRequest(AppModel):
