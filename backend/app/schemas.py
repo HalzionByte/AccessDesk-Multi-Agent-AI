@@ -87,6 +87,13 @@ class UserProfile(AppModel):
     preferred_language: PreferredLanguage = PreferredLanguage.ENGLISH
 
 
+class CustomerRegistrationRequest(AppModel):
+    """Profile data allowed during self-service customer registration."""
+
+    name: str = Field(min_length=2, max_length=100)
+    preferred_language: PreferredLanguage = PreferredLanguage.ENGLISH
+
+
 class Order(AppModel):
     order_id: NonEmptyText
     customer_uid: NonEmptyText
@@ -176,6 +183,33 @@ class PolicyCitation(AppModel):
     id: NonEmptyText
     title: NonEmptyText
     text: NonEmptyText
+
+
+class IntakeResult(AppModel):
+    """Validated output boundary for the intake agent."""
+
+    language: PreferredLanguage
+    order_id: str | None = None
+    issue_type: str | None = Field(default=None, max_length=200)
+    description: str | None = Field(default=None, max_length=4_000)
+    resolution: str | None = Field(default=None, max_length=200)
+    follow_up_question: str | None = Field(default=None, max_length=1_000)
+
+
+class PolicyResult(AppModel):
+    """Validated output boundary for policy explanations."""
+
+    explanation: NonEmptyText
+    citation_ids: list[NonEmptyText] = Field(default_factory=list)
+    uncertainty: bool = False
+
+
+class ResolutionResult(AppModel):
+    """Validated output boundary for the resolution agent."""
+
+    summary: NonEmptyText
+    next_step: NonEmptyText
+    existing_case: bool = False
 
 
 class MissingRequirement(StrEnum):

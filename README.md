@@ -16,6 +16,8 @@ AccessDesk automates the preparation and tracking of a support case while keepin
 ## What AccessDesk does
 
 - Understands informal complaints in English and Roman Urdu.
+- Lets new customers create an account while keeping staff enrollment restricted.
+- Provides welcoming public Home, About, and Contact pages before authentication.
 - Extracts the order number, issue, description, and requested resolution.
 - Verifies that the order belongs to the signed-in customer.
 - Retrieves relevant policy passages and shows traceable citations.
@@ -43,7 +45,7 @@ The AI cannot approve a replacement, issue a refund, bypass a policy rule, or ch
 
 ## How it works
 
-1. The customer signs in and describes the problem.
+1. The customer creates an account or signs in, then describes the problem.
 2. The **Customer Intake Agent** extracts complaint details, while the backend verifies the order and its owner.
 3. The **Policy Agent** retrieves relevant policy sections, explains them in the customer's language, and identifies missing information.
 4. The customer supplies any missing details and uploads evidence.
@@ -131,7 +133,7 @@ Draft → Submitted → Under Review ─┬→ Needs Information → Under Revie
 
 Customers cannot change case status. Invalid transitions return `409 Conflict`.
 
-## Planned repository structure
+## Project structure
 
 ```text
 AccessDesk-Multi-Agent-AI/
@@ -160,6 +162,21 @@ AccessDesk-Multi-Agent-AI/
 └── README.md
 ```
 
+Important entry points:
+
+- `backend/app/main.py` creates the FastAPI application.
+- `backend/app/routers/` contains authenticated HTTP routes.
+- `backend/app/services/` contains deterministic business rules and Firestore operations.
+- `backend/app/schemas.py` defines API and persistence models.
+- `backend/tests/` contains unit and integration-style tests.
+- `frontend/src/main.jsx` starts the React application.
+- `frontend/src/app/App.jsx` composes providers and routing.
+- `frontend/src/app/routes.jsx` defines public and role-aware routes.
+- `frontend/src/api/client.js` is the boundary between mock/live API behavior.
+- `frontend/src/components/` contains reusable UI and workflow components.
+- `frontend/src/pages/` contains public, customer, and staff screens.
+- `frontend/src/mocks/` contains fictional development fixtures.
+
 ## Local setup
 
 The commands below describe the intended development environment once the backend and frontend are implemented.
@@ -168,7 +185,7 @@ The commands below describe the intended development environment once the backen
 
 - Python 3.11–3.13 (CrewAI does not currently support Python 3.14)
 - Node.js 20+
-- A Firebase project with Firestore and email/password authentication enabled
+- A Firebase project with Firestore and Firebase Authentication enabled
 - A Firebase Admin service-account credential
 - A Groq API key for live agent calls
 
@@ -196,36 +213,89 @@ VITE_USE_MOCKS=true
 
 Keep service-account files and API keys out of version control.
 
-### 2. Start the backend
+In Firebase Console, open **Authentication → Sign-in method** and enable:
+
+- **Email/Password**, including **Email link (passwordless sign-in)**
+- **Google**, with a project support email selected
+
+Under **Authentication → Settings → Authorized domains**, keep `localhost` for
+local development and add the deployed frontend domain before production use.
+Passwordless links return to `/login` on the same frontend origin from which
+they were requested.
+
+### 2. Create and activate the backend virtual environment
+
+Run these commands from the repository root. Use Python 3.11, 3.12, or 3.13;
+CrewAI does not currently support Python 3.14.
+
+Windows PowerShell:
+
+```powershell
+cd backend
+py -3.13 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
+If PowerShell blocks activation, you can run the virtual-environment interpreter
+directly as `.\.venv\Scripts\python.exe` instead.
+
+macOS or Linux:
 
 ```bash
 cd backend
-python -m venv .venv
+python3.13 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 ```
 
-Activate the virtual environment, then run:
+The active shell should now show `(.venv)`. Use `deactivate` when you want to
+leave the environment.
 
-```bash
-pip install -r requirements.txt
-python seed.py
-uvicorn app.main:app --reload --port 8000
+### 3. Seed Firebase demo data
+
+For a new, dedicated demo Firebase project, set `SEED_USER_PASSWORD` in `.env`
+and run this once from `backend/`:
+
+```powershell
+python seed.py --reset --confirm-project YOUR_FIREBASE_PROJECT_ID
 ```
 
-The API will be available at `http://localhost:8000`; use `GET /health` for a health check.
+Replace the placeholder with the exact `FIREBASE_PROJECT_ID`. The `--reset`
+option deletes AccessDesk application documents in that project, so do not use it
+against a project containing real data. Remove the seed password from deployment
+configuration after seeding.
 
-### 3. Start the frontend
+### 4. Start the backend
+
+```powershell
+python -m uvicorn app.main:app --reload --port 8000
+```
+
+The API is available at `http://localhost:8000`. Check `/health` or open the
+interactive API documentation at `http://localhost:8000/docs`.
+
+### 5. Start the frontend
 
 In a second terminal:
 
 ```bash
 cd frontend
-npm install
-npm run dev
+pnpm install --frozen-lockfile
+pnpm dev
 ```
 
 Open `http://localhost:5173`.
 
-Use `LLM_MODE=mock` and `VITE_USE_MOCKS=true` during development. Switch both to their live modes for an integrated demo after configuring Firebase and Groq.
+Vite loads the shared repository-root `.env` through
+`frontend/vite.config.ts`.
+
+For frontend-only fixture development, use `VITE_USE_MOCKS=true`. To exercise
+real Firebase and FastAPI without consuming Groq allowance, use
+`VITE_USE_MOCKS=false` with `LLM_MODE=mock`. For the fully integrated flow, use
+`VITE_USE_MOCKS=false` with `LLM_MODE=live`.
 
 ## API overview
 
@@ -234,6 +304,7 @@ All routes require a Firebase Bearer token except `/health`.
 | Method and route | Role | Purpose |
 | --- | --- | --- |
 | `GET /me` | Any | Return the signed-in user's profile and role |
+| `POST /auth/register` | New Firebase user | Enroll the authenticated identity as a customer |
 | `GET /orders` | Customer | List the customer's orders |
 | `POST /chat` | Customer | Run the agent needed for the current draft stage |
 | `POST /drafts/{id}/attachments` | Customer | Upload supporting evidence |
@@ -266,25 +337,58 @@ The evaluation set contains 15 labelled fictional complaints: six English, six R
 - prompt-injection resistance;
 - authorization and ownership isolation.
 
-Recommended checks:
+## Development guidelines
+
+- Reuse components from `frontend/src/components/ui/` and
+  `frontend/src/components/shared/` before introducing another primitive.
+- Keep mock/live API behavior in `frontend/src/api/client.js`; pages should not
+  define alternate backend endpoints.
+- Use Firebase only for browser authentication. Application data must travel
+  through authenticated FastAPI endpoints.
+- Keep customer-facing text concise, sentence case, and accessible.
+- Every data screen should provide loading, empty, error, and retry states.
+- Treat model output and customer-supplied prompt content as untrusted input.
+- Preserve backend role, ownership, validation, and deterministic policy checks.
+- Never commit `.env`, Firebase service-account files, API keys, or tokens.
+
+## Verification commands
+
+Run backend checks from `backend/`:
 
 ```bash
-cd backend
-pytest
-python eval/run_eval.py
+python -m pytest
+python -m ruff check app tests seed.py
+python -m mypy app seed.py --ignore-missing-imports
+```
+
+Run frontend checks from `frontend/`:
+
+```bash
+pnpm install --frozen-lockfile
+pnpm test
+pnpm exec tsc --noEmit
+pnpm build
+pnpm format:check
+```
+
+Run agent evaluation from `backend/`:
+
+```bash
+python eval/run_eval.py --mode mock
+# Requires GROQ_API_KEY and the installed CrewAI/LiteLLM stack:
+python eval/run_eval.py --mode live
 ```
 
 ## Current project status
 
-Tasks 1–4 and 7–9 are implemented. The backend provides authenticated identity,
-orders, drafts, attachments and customer case workflows. The frontend provides
-Firebase authentication with a mock-mode fallback, the shared design system,
-the customer support experience, My Cases, and the staff review dashboard.
-Task 10 QA and demo assets cover the implemented system, but its live AI
-integration and evaluation remain blocked by missing Tasks 5–6; in particular,
-live support chat requires the Task 6 `POST /chat` endpoint. See `Task 4.txt`,
-`Task 7.txt` through `Task 10.txt`, and `docs/qa-report.md` for verification
-notes.
+The planned core features are implemented. The backend provides authenticated identity, orders,
+durable drafts, attachments, controlled Intake/Policy/Resolution agents, the
+stage-based `/chat` workflow, and idempotent customer case workflows. The
+frontend provides Firebase authentication with a mock-mode fallback, the shared
+design system, customer support and My Cases experiences, and the staff review
+dashboard. Mock evaluation is available without an API key; live Groq evaluation
+must be run separately with `LLM_MODE=live` and `GROQ_API_KEY` configured. See
+`AI_USAGE.md` and `docs/qa-report.md` for implementation and verification notes.
 
 ## Limitations
 

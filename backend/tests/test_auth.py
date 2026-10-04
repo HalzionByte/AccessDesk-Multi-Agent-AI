@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from app import auth as auth_module
 from app.firebase import FirebaseUnavailableError
+from app.services import users as users_module
 from tests.auth_helpers import auth_header
 
 
@@ -86,3 +87,73 @@ def test_token_without_role_is_forbidden(client, monkeypatch):
 
     assert response.status_code == 403
     assert response.json()["code"] == "role_required"
+
+
+def test_authenticated_new_user_can_register_only_as_customer(
+    client, database, monkeypatch
+):
+    claims = {
+        "uid": "new-customer",
+        "email": "new.customer@example.com",
+        "name": "New Customer",
+    }
+    assigned: dict[str, object] = {}
+    monkeypatch.setattr(auth_module, "decode_firebase_token", lambda _: claims)
+    monkeypatch.setattr(users_module, "get_firebase_app", lambda: object())
+
+    def capture_claims(uid, custom_claims, *, app):
+        assigned.update({"uid": uid, "claims": custom_claims, "app": app})
+
+    monkeypatch.setattr(
+        users_module.firebase_auth, "set_custom_user_claims", capture_claims
+    )
+
+    response = client.post(
+        "/auth/register",
+        headers=auth_header("new-user-token"),
+        json={"name": "New Customer", "preferredLanguage": "roman-urdu"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["role"] == "customer"
+    assert assigned["uid"] == "new-customer"
+    assert assigned["claims"] == {
+        "role": "customer",
+        "preferredLanguage": "roman-urdu",
+    }
+    stored = database.collection("users").document("new-customer").get().to_dict()
+    assert stored["role"] == "customer"
+    assert stored["fictional"] is False
+
+
+def test_staff_account_cannot_be_changed_through_registration(
+    client, token_decoder, monkeypatch
+):
+    called = False
+
+    def unexpected_claim_change(*args, **kwargs):
+        nonlocal called
+        called = True
+
+    monkeypatch.setattr(
+        users_module.firebase_auth,
+        "set_custom_user_claims",
+        unexpected_claim_change,
+    )
+    response = client.post(
+        "/auth/register",
+        headers=auth_header("staff-token"),
+        json={"name": "Not a customer", "preferredLanguage": "en"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "account_already_registered"
+    assert called is False
+
+
+def test_registration_requires_a_verified_firebase_token(client):
+    response = client.post(
+        "/auth/register",
+        json={"name": "New Customer", "preferredLanguage": "en"},
+    )
+    assert response.status_code == 401

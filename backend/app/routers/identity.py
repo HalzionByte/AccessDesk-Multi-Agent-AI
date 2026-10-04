@@ -1,11 +1,27 @@
 """Authenticated identity routes."""
 
-from fastapi import APIRouter
+from typing import Annotated, Any
 
-from app.auth import CurrentUser
-from app.schemas import UserProfile
+from fastapi import APIRouter, Depends
+
+from app.auth import CurrentUser, VerifiedClaims
+from app.firebase import get_database
+from app.schemas import CustomerRegistrationRequest, UserProfile
+from app.services.users import register_customer
 
 router = APIRouter(tags=["identity"])
+Database = Annotated[Any, Depends(get_database)]
+
+
+@router.post("/auth/register", response_model=UserProfile)
+def register_customer_account(
+    payload: CustomerRegistrationRequest,
+    claims: VerifiedClaims,
+    database: Database,
+) -> UserProfile:
+    """Enroll an authenticated Firebase account as a customer only."""
+
+    return register_customer(database, claims, payload)
 
 
 @router.get("/me", response_model=UserProfile)

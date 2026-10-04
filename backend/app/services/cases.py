@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from typing import Any, TypeVar
 
@@ -267,6 +267,7 @@ def create_support_case(
         current_count = int((counter_snapshot.to_dict() or {}).get("value", 0))
         next_count = current_count + 1
         tracking_number = f"AD-{now.year}-{next_count:04d}"
+        confirmation_event_reference = database.collection("events").document()
         event_reference = database.collection("events").document()
 
         support_case = SupportCase(
@@ -319,6 +320,18 @@ def create_support_case(
             )
         transaction.set(counter_reference, {"value": next_count})
         transaction.set(
+            confirmation_event_reference,
+            {
+                "eventId": confirmation_event_reference.id,
+                "draftId": current_draft.draft_id,
+                "caseId": support_case.case_id,
+                "actor": "Customer",
+                "action": "confirmed submission",
+                "outcome": "Request confirmed",
+                "createdAt": now,
+            },
+        )
+        transaction.set(
             event_reference,
             {
                 "eventId": event_reference.id,
@@ -327,7 +340,7 @@ def create_support_case(
                 "actor": "System",
                 "action": "created case",
                 "outcome": tracking_number,
-                "createdAt": now,
+                "createdAt": now + timedelta(microseconds=1),
             },
         )
         transaction.update(

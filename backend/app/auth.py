@@ -53,9 +53,9 @@ def _identity_from_claims(claims: dict[str, Any]) -> AuthenticatedUser:
         ) from exc
 
 
-def get_current_user(
+def get_verified_claims(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
-) -> AuthenticatedUser:
+) -> dict[str, Any]:
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise AppError(
             status.HTTP_401_UNAUTHORIZED,
@@ -80,6 +80,13 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         ) from exc
 
+    return claims
+
+
+VerifiedClaims = Annotated[dict[str, Any], Depends(get_verified_claims)]
+
+
+def get_current_user(claims: VerifiedClaims) -> AuthenticatedUser:
     return _identity_from_claims(claims)
 
 

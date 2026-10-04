@@ -24,6 +24,7 @@ const scenarios = [
   { id: "repeat", label: "S3 Repeat" },
   { id: "late", label: "S4 Late" },
 ]
+const savedDraftKey = "accessdesk-active-draft"
 export default function SupportPage() {
   const navigate = useNavigate()
   const fileRef = useRef(null)
@@ -51,7 +52,14 @@ export default function SupportPage() {
     submissionKeyRef.current = ""
     try {
       const orderList = await api.getOrders()
-      const response = isMockMode ? await api.getScenario(nextScenario) : null
+      const savedDraftId = isMockMode
+        ? ""
+        : sessionStorage.getItem(savedDraftKey)
+      const response = isMockMode
+        ? await api.getScenario(nextScenario)
+        : savedDraftId
+          ? await api.getDraft(savedDraftId)
+          : null
       setData(response)
       setOrders(orderList)
       setOrderId(
@@ -69,7 +77,14 @@ export default function SupportPage() {
                 citations: response.citations,
               },
             ]
-          : [],
+          : response?.draftId
+            ? [
+                {
+                  role: "assistant",
+                  text: "Your saved request is ready. Continue where you left off.",
+                },
+              ]
+            : [],
       )
       setFiles(
         response?.preview?.attachments?.map((attachment) => ({
@@ -101,6 +116,20 @@ export default function SupportPage() {
     const node = chatRef.current
     if (node) node.scrollTop = node.scrollHeight
   }, [messages, busy, error])
+  const uploadPendingFiles = async (draftId) => {
+    const uploadedFiles = [...files]
+    for (const [index, file] of files.entries()) {
+      if (file instanceof File && !file.demo && !file.attachmentId) {
+        const attachment = await api.uploadAttachment(draftId, file)
+        uploadedFiles[index] = {
+          ...attachment,
+          name: attachment.filename,
+        }
+        setFiles([...uploadedFiles])
+      }
+    }
+    return uploadedFiles
+  }
   const runChat = async (userText, appendUser = true) => {
     if (!userText || busy) return
     if (appendUser) {
@@ -111,6 +140,7 @@ export default function SupportPage() {
     setBusy(true)
     setError("")
     try {
+      if (data?.draftId) await uploadPendingFiles(data.draftId)
       const response = await api.sendChat({
         draftId: data?.draftId,
         orderId,
@@ -120,6 +150,7 @@ export default function SupportPage() {
             ? "busy"
             : scenario,
       })
+      if (!isMockMode) sessionStorage.setItem(savedDraftKey, response.draftId)
       setData(response)
       setMessages((current) => [
         ...current,
@@ -166,20 +197,11 @@ export default function SupportPage() {
     setSubmitting(true)
     setError("")
     try {
-      const uploadedFiles = [...files]
-      for (const [index, file] of files.entries()) {
-        if (file instanceof File && !file.demo && !file.attachmentId) {
-          const attachment = await api.uploadAttachment(data.draftId, file)
-          uploadedFiles[index] = {
-            ...attachment,
-            name: attachment.filename,
-          }
-          setFiles([...uploadedFiles])
-        }
-      }
+      await uploadPendingFiles(data.draftId)
       const key = submissionKeyRef.current || crypto.randomUUID()
       submissionKeyRef.current = key
       const result = await api.submitCase(data.draftId, key)
+      if (!isMockMode) sessionStorage.removeItem(savedDraftKey)
       setTrackingNo(result.trackingNo)
       setData((current) => ({
         ...current,
@@ -207,7 +229,7 @@ export default function SupportPage() {
   }
   const visibleChecklist =
     data?.checklist?.map((item) =>
-      item.key === "photo" ? { ...item, done: files.length > 0 } : item,
+      item.key === "image" && files.length > 0 ? { ...item, done: true } : item,
     ) || []
   const complete =
     visibleChecklist.length > 0 && visibleChecklist.every((item) => item.done)

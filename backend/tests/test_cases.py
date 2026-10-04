@@ -48,7 +48,10 @@ def test_confirmed_submit_creates_committed_case_and_tracking_number(
         f"/cases/{body['caseId']}", headers=auth_header("customer-token")
     )
     assert detail.status_code == 200
-    assert detail.json()["events"][0]["action"] == "created case"
+    assert [event["action"] for event in detail.json()["events"]] == [
+        "confirmed submission",
+        "created case",
+    ]
     assert detail.json()["attachments"][0]["filename"] == "damage.png"
 
 
@@ -315,4 +318,7 @@ def test_staff_can_filter_cases_by_status(client, database, token_decoder):
         f"/staff/cases/{submitted.case_id}", headers=auth_header("staff-token")
     )
     assert detail.status_code == 200
-    assert detail.json()["events"][0]["action"] == "created case"
+    assert [event["action"] for event in detail.json()["events"]] == [
+        "confirmed submission",
+        "created case",
+    ]

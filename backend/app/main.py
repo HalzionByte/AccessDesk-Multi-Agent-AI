@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import Settings, get_settings
 from app.errors import register_error_handlers
 from app.routers.cases import router as cases_router
+from app.routers.chat import router as chat_router
 from app.routers.drafts import router as drafts_router
 from app.routers.files import router as files_router
 from app.routers.identity import router as identity_router
@@ -37,6 +38,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(drafts_router)
     application.include_router(files_router)
     application.include_router(cases_router)
+    application.include_router(chat_router)
     application.include_router(staff_router)
 
     @application.get("/health", response_model=HealthResponse, tags=["system"])

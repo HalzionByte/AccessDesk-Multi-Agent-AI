@@ -1,6 +1,29 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { normalizeCase, normalizeOrder } from "./client.js"
+import { api, isMockMode, normalizeCase, normalizeOrder } from "./client.js"
+
+test("mock authentication is disabled unless explicitly enabled", () => {
+  assert.equal(isMockMode, false)
+})
+
+test("identity requests use their explicit Firebase token", async () => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async (_url, options) => {
+    assert.equal(options.headers.get("Authorization"), "Bearer verified-token")
+    assert.equal("accessToken" in options, false)
+    return new Response(
+      JSON.stringify({ uid: "u1", role: "customer", email: "u@example.com" }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    )
+  }
+  try {
+    const profile = await api.getMe(undefined, "verified-token")
+    assert.equal(profile.role, "customer")
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
 test("normalizes backend order identifiers", () => {
   assert.equal(normalizeOrder({ orderId: "NF-1" }).id, "NF-1")
 })

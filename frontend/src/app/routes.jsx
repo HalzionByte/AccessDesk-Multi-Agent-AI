@@ -2,8 +2,11 @@ import { Navigate, createBrowserRouter } from "react-router"
 import { useAuth } from "../context/AuthContext"
 import AppShell from "../components/shared/AppShell"
 import { Spinner } from "../components/ui"
+import AboutPage from "../pages/AboutPage"
 import CasesPage from "../pages/CasesPage"
 import ComponentsPage from "../pages/ComponentsPage"
+import ContactPage from "../pages/ContactPage"
+import HomePage from "../pages/HomePage"
 import LoginPage from "../pages/LoginPage"
 import StaffPage from "../pages/StaffPage"
 import SupportPage from "../pages/SupportPage"
@@ -22,33 +25,14 @@ function Guard({ role, children }) {
     )
   return children
 }
-function Home() {
-  const { initializing, role } = useAuth()
-  if (initializing)
-    return (
-      <div className="flex min-h-48 items-center justify-center">
-        <Spinner className="size-6" />
-      </div>
-    )
-  return (
-    <Navigate
-      to={
-        role === "staff"
-          ? "/staff"
-          : role === "customer"
-            ? "/support"
-            : "/login"
-      }
-      replace
-    />
-  )
-}
 export const router = createBrowserRouter([
   {
     path: "/",
     Component: AppShell,
     children: [
-      { index: true, Component: Home },
+      { index: true, Component: HomePage },
+      { path: "about", Component: AboutPage },
+      { path: "contact", Component: ContactPage },
       { path: "login", Component: LoginPage },
       {
         path: "support",

@@ -1,7 +1,7 @@
 import { cases, chatResponses, orders } from "../mocks/fixtures.js"
 const env = import.meta.env || {}
 const apiBaseUrl = (env.VITE_API_URL || "").replace(/\/$/, "")
-export const isMockMode = env.VITE_USE_MOCKS !== "false"
+export const isMockMode = env.VITE_USE_MOCKS === "true"
 let authToken = ""
 const delay = (ms = 450) => new Promise((resolve) => setTimeout(resolve, ms))
 export class ApiError extends Error {
@@ -64,6 +64,16 @@ async function mockRequest(path, options) {
       email: `${role}@accessdesk.example`,
       role,
       preferredLanguage: "en",
+    }
+  }
+  if (path === "/auth/register") {
+    const payload = JSON.parse(options.body)
+    return {
+      uid: "demo-customer-new",
+      name: payload.name,
+      email: "new.customer@demo.accessdesk.app",
+      role: "customer",
+      preferredLanguage: payload.preferredLanguage,
     }
   }
   if (path === "/orders") return orders.map(normalizeOrder)
@@ -133,15 +143,17 @@ async function mockRequest(path, options) {
 }
 async function request(path, options = {}) {
   if (isMockMode) return mockRequest(path, options)
-  const headers = new Headers(options.headers || {})
+  const { accessToken, ...fetchOptions } = options
+  const headers = new Headers(fetchOptions.headers || {})
   headers.set("Accept", "application/json")
-  if (authToken) headers.set("Authorization", `Bearer ${authToken}`)
-  if (options.body && !(options.body instanceof FormData)) {
+  const requestToken = accessToken || authToken
+  if (requestToken) headers.set("Authorization", `Bearer ${requestToken}`)
+  if (fetchOptions.body && !(fetchOptions.body instanceof FormData)) {
     headers.set("Content-Type", "application/json")
   }
   let response
   try {
-    response = await fetch(`${apiBaseUrl}${path}`, { ...options, headers })
+    response = await fetch(`${apiBaseUrl}${path}`, { ...fetchOptions, headers })
   } catch {
     throw new ApiError(
       "network_error",
@@ -201,7 +213,13 @@ async function requestFile(path) {
   }
 }
 export const api = {
-  getMe: (mockRole) => request("/me", { mockRole }),
+  getMe: (mockRole, accessToken) => request("/me", { mockRole, accessToken }),
+  registerCustomer: (payload, accessToken) =>
+    request("/auth/register", {
+      method: "POST",
+      body: JSON.stringify(payload),
+      accessToken,
+    }),
   getOrders: async () => (await request("/orders")).map(normalizeOrder),
   getCases: async () => (await request("/cases")).map(normalizeCase),
   getStaffCases: async (status = "") => {

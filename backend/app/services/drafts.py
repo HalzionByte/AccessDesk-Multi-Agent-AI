@@ -114,6 +114,48 @@ def set_draft_stage(
     return draft.model_copy(update={"stage": stage, "updated_at": updated_at})
 
 
+def save_draft_progress(
+    database: Any,
+    draft_id: str,
+    customer_uid: str,
+    *,
+    fields: DraftFields,
+    order_id: str | None,
+    stage: DraftStage,
+    missing: list[str],
+    policy_refs: list[str],
+    summary: str | None,
+) -> Draft:
+    """Persist one workflow transition after all agent output is validated."""
+
+    draft = get_draft(database, draft_id, customer_uid)
+    if order_id is not None:
+        get_order(database, order_id, customer_uid)
+
+    updated_at = _now()
+    updates = {
+        "orderId": order_id,
+        "stage": stage.value,
+        "fields": fields.model_dump(mode="python", by_alias=True),
+        "missing": missing,
+        "policyRefs": policy_refs,
+        "summary": summary,
+        "updatedAt": updated_at,
+    }
+    database.collection("drafts").document(draft_id).update(updates)
+    return draft.model_copy(
+        update={
+            "order_id": order_id,
+            "stage": stage,
+            "fields": fields,
+            "missing": missing,
+            "policy_refs": policy_refs,
+            "summary": summary,
+            "updated_at": updated_at,
+        }
+    )
+
+
 def add_message(
     database: Any,
     draft_id: str,

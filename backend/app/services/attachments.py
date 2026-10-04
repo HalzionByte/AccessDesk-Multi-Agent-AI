@@ -66,6 +66,28 @@ def _view(attachment: Attachment) -> AttachmentView:
     )
 
 
+def list_draft_attachments(
+    database: Any, draft_id: str, customer_uid: str
+) -> list[Attachment]:
+    """Load attachment metadata referenced by an owned draft."""
+
+    draft = get_draft(database, draft_id, customer_uid)
+    attachments: list[Attachment] = []
+    for attachment_id in draft.attachment_ids:
+        snapshot = database.collection("attachments").document(attachment_id).get()
+        if not snapshot.exists:
+            continue
+        attachment = _attachment_from_snapshot(snapshot)
+        if attachment.owner_uid != customer_uid or attachment.draft_id != draft_id:
+            raise AppError(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                "attachment_data_invalid",
+                "Attachment metadata is temporarily unavailable.",
+            )
+        attachments.append(attachment)
+    return attachments
+
+
 async def save_attachment(
     database: Any,
     settings: Settings,

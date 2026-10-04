@@ -16,6 +16,7 @@ function NavItem({ to, children, onClick }) {
   return (
     <NavLink
       to={to}
+      end={to === "/"}
       onClick={onClick}
       className={({ isActive }) =>
         `rounded-lg px-3 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:focus-visible:ring-indigo-400 ${
@@ -84,7 +85,7 @@ export default function AppShell() {
     window.scrollTo({ top: 0 })
   }, [location.pathname])
 
-  const nav =
+  const workspaceNav =
     role === "customer" ? (
       <>
         <NavItem to="/support">Support</NavItem>
@@ -93,6 +94,15 @@ export default function AppShell() {
     ) : role === "staff" ? (
       <NavItem to="/staff">Dashboard</NavItem>
     ) : null
+
+  const nav = (
+    <>
+      <NavItem to="/">Home</NavItem>
+      <NavItem to="/about">About</NavItem>
+      <NavItem to="/contact">Contact</NavItem>
+      {workspaceNav}
+    </>
+  )
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900 dark:bg-stone-900 dark:text-stone-100">
@@ -107,9 +117,7 @@ export default function AppShell() {
             </span>
             AccessDesk
           </Link>
-          {role && (
-            <nav className="ml-6 hidden items-center gap-1 md:flex">{nav}</nav>
-          )}
+          <nav className="ml-6 hidden items-center gap-1 md:flex">{nav}</nav>
           <div className="ml-auto flex items-center gap-1">
             <Button
               variant="ghost"
@@ -147,18 +155,21 @@ export default function AppShell() {
                 )}
               </div>
             )}
-            {role && (
-              <Button
-                variant="ghost"
-                square
-                className="size-10 md:hidden"
-                onClick={() => setMenuOpen((value) => !value)}
-                aria-label="Toggle menu"
-                aria-expanded={menuOpen}
-              >
-                Menu
+            {!role && (
+              <Button variant="secondary" onClick={() => navigate("/login")}>
+                Log in
               </Button>
             )}
+            <Button
+              variant="ghost"
+              square
+              className="size-10 md:hidden"
+              onClick={() => setMenuOpen((value) => !value)}
+              aria-label="Toggle menu"
+              aria-expanded={menuOpen}
+            >
+              Menu
+            </Button>
           </div>
         </div>
         {menuOpen && (
@@ -187,6 +198,23 @@ export default function AppShell() {
             <p className="mt-1 text-slate-500 dark:text-stone-400">
               Demo data is fictional.
             </p>
+            <nav className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-slate-600 dark:text-stone-400">
+              <Link className="hover:text-indigo-600 hover:underline" to="/">
+                Home
+              </Link>
+              <Link
+                className="hover:text-indigo-600 hover:underline"
+                to="/about"
+              >
+                About
+              </Link>
+              <Link
+                className="hover:text-indigo-600 hover:underline"
+                to="/contact"
+              >
+                Contact
+              </Link>
+            </nav>
           </div>
           <div className="space-y-1 text-slate-600 md:text-right dark:text-stone-400">
             <p className="font-medium text-slate-800 dark:text-stone-200">
