@@ -16,6 +16,17 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 
 def _identity_from_claims(claims: dict[str, Any]) -> AuthenticatedUser:
+    firebase_claims = claims.get("firebase")
+    if (
+        isinstance(firebase_claims, dict)
+        and firebase_claims.get("sign_in_provider") == "password"
+        and claims.get("email_verified") is not True
+    ):
+        raise AppError(
+            status.HTTP_403_FORBIDDEN,
+            "email_verification_required",
+            "Verify your email before using AccessDesk.",
+        )
     uid = claims.get("uid") or claims.get("sub")
     email = claims.get("email")
     role = claims.get("role")

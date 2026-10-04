@@ -6,7 +6,7 @@ import json
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TypeVar
+from typing import Any, TypeVar
 
 from fastapi import status
 from pydantic import BaseModel, ValidationError
@@ -55,6 +55,15 @@ def _parse_json(raw: object) -> object:
     return json.loads(text[start : end + 1])
 
 
+def _without_cache_breakpoints(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """CrewAI's LiteLLM fallback does not strip its Groq-unsupported marker."""
+
+    return [
+        {key: value for key, value in message.items() if key != "cache_breakpoint"}
+        for message in messages
+    ]
+
+
 def _crewai_call(settings: Settings, spec: AgentSpec, prompt: str) -> object:
     try:
         from crewai import LLM, Agent, Crew, Process, Task
@@ -72,7 +81,15 @@ def _crewai_call(settings: Settings, spec: AgentSpec, prompt: str) -> object:
             "The live assistant is not configured.",
         )
 
-    llm = LLM(
+    class GroqCompatibleLLM(LLM):
+        def _format_messages_for_provider(
+            self, messages: list[dict[str, Any]]
+        ) -> list[dict[str, str]]:
+            return super()._format_messages_for_provider(
+                _without_cache_breakpoints(messages)
+            )
+
+    llm = GroqCompatibleLLM(
         model=settings.groq_model,
         api_key=settings.groq_api_key.get_secret_value(),
         temperature=0,
@@ -121,7 +138,9 @@ def run_structured_agent(
     last_error: Exception | None = None
     for attempt in range(max_attempts):
         try:
-            return result_type.model_validate(_parse_json(invoke(settings, spec, prompt)))
+            return result_type.model_validate(
+                _parse_json(invoke(settings, spec, prompt))
+            )
         except AppError:
             raise
         except (ValidationError, ValueError, json.JSONDecodeError) as exc:
@@ -130,10 +149,14 @@ def run_structured_agent(
                 "llm_invalid_response",
                 "The assistant returned an invalid response. Your draft is safe; please retry.",
             ) from exc
-        except Exception as exc:  # noqa: BLE001 - provider SDK exceptions vary.
+        except Exception as exc:
             last_error = exc
             if not _is_retryable(exc):
-                break
+                raise AppError(
+                    status.HTTP_503_SERVICE_UNAVAILABLE,
+                    "llm_unavailable",
+                    "The live assistant could not process this request. Please try later.",
+                ) from exc
             if attempt + 1 < max_attempts:
                 time.sleep(0.1 * (2**attempt))
 

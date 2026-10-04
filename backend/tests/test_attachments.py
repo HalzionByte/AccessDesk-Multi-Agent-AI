@@ -3,6 +3,7 @@ from __future__ import annotations
 from app.services.attachments import MAX_ATTACHMENT_BYTES
 from app.services.drafts import create_draft
 from tests.auth_helpers import auth_header
+from tests.fakes import FakeDocumentReference, FakeTransaction
 
 PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"fictional-image-data"
 
@@ -36,6 +37,31 @@ def test_customer_can_upload_and_download_valid_evidence(
     assert download_response.status_code == 200
     assert download_response.content == PNG_BYTES
     assert download_response.headers["content-type"] == "image/png"
+
+
+def test_upload_starts_transaction_before_reading_draft(
+    client, database, token_decoder, monkeypatch
+):
+    draft = create_draft(database, "demo-customer-1")
+    original_get = FakeDocumentReference.get
+
+    def require_started_transaction(reference, transaction=None):
+        if transaction is not None and not getattr(transaction, "active", False):
+            raise ValueError("Transaction not in progress")
+        return original_get(reference, transaction)
+
+    def run_started_transaction(operation):
+        transaction = FakeTransaction()
+        transaction.active = True
+        return operation(transaction)
+
+    monkeypatch.setattr(FakeDocumentReference, "get", require_started_transaction)
+    monkeypatch.setattr(database, "run_transaction", run_started_transaction)
+
+    response = upload_png(client, draft.draft_id)
+
+    assert response.status_code == 201
+    assert len(database.collection("attachments").stream()) == 1
 
 
 def test_other_customer_cannot_read_attachment_but_staff_can(

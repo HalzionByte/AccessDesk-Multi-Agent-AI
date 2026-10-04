@@ -14,6 +14,7 @@ from app.config import Settings
 from app.errors import AppError
 from app.schemas import Attachment, AttachmentView, AuthenticatedUser, UserRole
 from app.services.drafts import get_draft
+from app.services.transactions import run_transaction
 
 MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024
 MAX_ATTACHMENTS_PER_DRAFT = 3
@@ -141,43 +142,44 @@ async def save_attachment(
         destination.parent.mkdir(parents=True, exist_ok=True)
         await anyio.to_thread.run_sync(_write_exclusive, destination, content)
 
-        transaction = database.transaction()
-        draft_reference = database.collection("drafts").document(draft_id)
-        current_snapshot = draft_reference.get(transaction=transaction)
-        if not current_snapshot.exists:
-            raise AppError(
-                status.HTTP_404_NOT_FOUND, "draft_not_found", "Draft not found."
-            )
-        current = current_snapshot.to_dict() or {}
-        if current.get("customerUid") != customer_uid:
-            raise AppError(
-                status.HTTP_404_NOT_FOUND, "draft_not_found", "Draft not found."
-            )
-        attachment_ids = list(current.get("attachmentIds", []))
-        if len(attachment_ids) >= MAX_ATTACHMENTS_PER_DRAFT:
-            raise AppError(
-                status.HTTP_422_UNPROCESSABLE_CONTENT,
-                "attachment_limit",
-                "A draft can contain at most three attachments.",
-            )
+        def persist_metadata(transaction: Any) -> AttachmentView:
+            draft_reference = database.collection("drafts").document(draft_id)
+            current_snapshot = draft_reference.get(transaction=transaction)
+            if not current_snapshot.exists:
+                raise AppError(
+                    status.HTTP_404_NOT_FOUND, "draft_not_found", "Draft not found."
+                )
+            current = current_snapshot.to_dict() or {}
+            if current.get("customerUid") != customer_uid:
+                raise AppError(
+                    status.HTTP_404_NOT_FOUND, "draft_not_found", "Draft not found."
+                )
+            attachment_ids = list(current.get("attachmentIds", []))
+            if len(attachment_ids) >= MAX_ATTACHMENTS_PER_DRAFT:
+                raise AppError(
+                    status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    "attachment_limit",
+                    "A draft can contain at most three attachments.",
+                )
 
-        attachment = Attachment(
-            attachment_id=attachment_reference.id,
-            owner_uid=customer_uid,
-            draft_id=draft_id,
-            path=stored_relative_path.as_posix(),
-            filename=original_filename,
-            mime=mime,
-            size=len(content),
-        )
-        attachment_ids.append(attachment.attachment_id)
-        transaction.set(
-            attachment_reference,
-            attachment.model_dump(mode="python", by_alias=True),
-        )
-        transaction.update(draft_reference, {"attachmentIds": attachment_ids})
-        transaction.commit()
-        return _view(attachment)
+            attachment = Attachment(
+                attachment_id=attachment_reference.id,
+                owner_uid=customer_uid,
+                draft_id=draft_id,
+                path=stored_relative_path.as_posix(),
+                filename=original_filename,
+                mime=mime,
+                size=len(content),
+            )
+            attachment_ids.append(attachment.attachment_id)
+            transaction.set(
+                attachment_reference,
+                attachment.model_dump(mode="python", by_alias=True),
+            )
+            transaction.update(draft_reference, {"attachmentIds": attachment_ids})
+            return _view(attachment)
+
+        return run_transaction(database, persist_metadata)
     except AppError:
         destination.unlink(missing_ok=True)
         raise

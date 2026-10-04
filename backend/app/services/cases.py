@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
-from typing import Any, TypeVar
+from typing import Any
 
 from fastapi import status
 from google.cloud.firestore_v1.base_query import FieldFilter
-from google.cloud.firestore_v1.transaction import transactional
 from pydantic import ValidationError
 
 from app.errors import AppError
@@ -23,8 +21,7 @@ from app.schemas import (
     SupportCase,
 )
 from app.services.events import list_case_events
-
-T = TypeVar("T")
+from app.services.transactions import run_transaction
 
 STAFF_TRANSITIONS: dict[CaseStatus, frozenset[CaseStatus]] = {
     CaseStatus.SUBMITTED: frozenset({CaseStatus.UNDER_REVIEW}),
@@ -42,15 +39,6 @@ STAFF_TRANSITIONS: dict[CaseStatus, frozenset[CaseStatus]] = {
 
 def _now() -> datetime:
     return datetime.now(UTC)
-
-
-def _run_transaction(database: Any, operation: Callable[[Any], T]) -> T:
-    """Run with Firestore retries; adapters may provide an equivalent runner."""
-
-    adapter_runner = getattr(database, "run_transaction", None)
-    if adapter_runner is not None:
-        return adapter_runner(operation)
-    return transactional(operation)(database.transaction())
 
 
 def _digest(value: str) -> str:
@@ -349,7 +337,7 @@ def create_support_case(
         )
         return support_case
 
-    return _run_transaction(database, create_or_get)
+    return run_transaction(database, create_or_get)
 
 
 def _attachment_views(database: Any, case: SupportCase) -> list[AttachmentView]:
@@ -500,7 +488,7 @@ def update_case_status(
             }
         )
 
-    return _run_transaction(database, transition)
+    return run_transaction(database, transition)
 
 
 def reply_to_case(
@@ -573,4 +561,4 @@ def reply_to_case(
             }
         )
 
-    return _run_transaction(database, reply)
+    return run_transaction(database, reply)

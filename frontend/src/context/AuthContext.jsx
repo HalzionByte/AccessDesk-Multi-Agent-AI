@@ -7,341 +7,237 @@ import {
   useRef,
   useState,
 } from "react"
-import {
-  createUserWithEmailAndPassword,
-  GoogleAuthProvider,
-  isSignInWithEmailLink,
-  onIdTokenChanged,
-  sendSignInLinkToEmail,
-  signInWithEmailAndPassword,
-  signInWithEmailLink,
-  signInWithPopup,
-  signOut,
-  updateProfile,
-} from "firebase/auth"
+import { onAuthStateChanged, onIdTokenChanged } from "firebase/auth"
 import { api, isMockMode, setAuthToken } from "../api/client"
 import { getFirebaseAuth } from "../firebase"
-import {
-  authenticatedUserFrom,
-  canSelfEnroll,
-  customerName,
-  isInvalidEmailLinkError,
-} from "./authSession"
+import * as authService from "../services/auth"
 
-const DEMO_SESSION_KEY = "accessdesk-demo-session"
-const EMAIL_LINK_STORAGE_KEY = "accessdesk-email-link"
 const AuthContext = createContext(null)
 
-function readJsonStorage(key) {
-  try {
-    return JSON.parse(localStorage.getItem(key))
-  } catch {
-    return null
-  }
-}
-
-function readDemoSession() {
-  if (!isMockMode) return null
-  const stored = readJsonStorage(DEMO_SESSION_KEY)
-  return stored?.role ? stored : null
-}
-
 export function AuthProvider({ children }) {
-  const [session, setSession] = useState(readDemoSession)
-  const [initializing, setInitializing] = useState(!isMockMode)
-  const [passwordlessLinkPending, setPasswordlessLinkPending] = useState(false)
-  const [savedPasswordlessEmail, setSavedPasswordlessEmail] = useState("")
-  const interactiveOperation = useRef(false)
-  const sessionRevision = useRef(0)
+  const [user, setUser] = useState(null)
+  const [profile, setProfile] = useState(null)
+  const [token, setToken] = useState(null)
+  const [initializing, setInitializing] = useState(true)
+  const [error, setError] = useState("")
+  const [redirectReturnTo, setRedirectReturnTo] = useState(null)
+  const [redirectChecked, setRedirectChecked] = useState(false)
+  const revision = useRef(0)
+  const inflight = useRef(null)
+  const authenticatedUid = useRef(null)
 
-  const resolveFirebaseSession = useCallback(
-    async (
-      firebaseUser,
-      { allowEnrollment = false, registration = {} } = {},
-    ) => {
-      let token = await firebaseUser.getIdToken()
-      let profile
+  const clearSession = useCallback(() => {
+    authenticatedUid.current = null
+    setAuthToken("")
+    setProfile(null)
+    setToken(null)
+  }, [])
 
-      try {
-        profile = await api.getMe(undefined, token)
-      } catch (error) {
-        if (!allowEnrollment || !canSelfEnroll(error)) throw error
-
-        const name = customerName(firebaseUser, registration.name)
-        if (!firebaseUser.displayName) {
-          await updateProfile(firebaseUser, { displayName: name })
-        }
-        await api.registerCustomer(
-          {
-            name,
-            preferredLanguage: registration.preferredLanguage || "en",
-          },
-          token,
-        )
-        token = await firebaseUser.getIdToken(true)
-        profile = await api.getMe(undefined, token)
-      }
-
-      return { role: profile.role, profile, token }
-    },
-    [],
-  )
-
-  const commitFirebaseSession = useCallback(
-    async (firebaseUser, options, revision) => {
-      const next = await resolveFirebaseSession(firebaseUser, options)
-      if (revision === sessionRevision.current) {
-        setAuthToken(next.token)
-        setSession(next)
-      }
-      return next
-    },
-    [resolveFirebaseSession],
-  )
-
-  const runFirebaseOperation = useCallback(
-    async (authenticate, options = {}) => {
-      const revision = ++sessionRevision.current
-      interactiveOperation.current = true
-      setSession(null)
-      setAuthToken("")
-      try {
-        const firebaseUser = authenticatedUserFrom(await authenticate())
-        return await commitFirebaseSession(firebaseUser, options, revision)
-      } catch (error) {
-        if (revision === sessionRevision.current) {
-          setSession(null)
-          setAuthToken("")
-        }
-        throw error
-      } finally {
-        interactiveOperation.current = false
+  const resolveSession = useCallback(
+    async (firebaseUser) => {
+      if (!firebaseUser) return null
+      if (!firebaseUser.emailVerified) {
+        clearSession()
+        setUser(firebaseUser)
         setInitializing(false)
+        return null
+      }
+      if (inflight.current?.uid === firebaseUser.uid)
+        return inflight.current.promise
+      const currentRevision = ++revision.current
+      setInitializing(true)
+      const promise = (async () => {
+        await authService.syncUserDocument(firebaseUser)
+        let idToken = await firebaseUser.getIdToken()
+        let backendProfile
+        try {
+          const mockRole = isMockMode
+            ? (await firebaseUser.getIdTokenResult()).claims.role
+            : undefined
+          backendProfile = await api.getMe(mockRole, idToken)
+        } catch (requestError) {
+          if (
+            requestError.status !== 403 ||
+            requestError.code !== "role_required"
+          )
+            throw requestError
+          await api.registerCustomer(
+            {
+              name:
+                firebaseUser.displayName || firebaseUser.email.split("@")[0],
+              preferredLanguage: "en",
+            },
+            idToken,
+          )
+          idToken = await firebaseUser.getIdToken(true)
+          backendProfile = await api.getMe(undefined, idToken)
+        }
+        if (currentRevision === revision.current) {
+          authenticatedUid.current = firebaseUser.uid
+          setUser(firebaseUser)
+          setProfile(backendProfile)
+          setToken(idToken)
+          setAuthToken(idToken)
+          setError("")
+        }
+        return { user: firebaseUser, profile: backendProfile, token: idToken }
+      })()
+      inflight.current = { uid: firebaseUser.uid, promise }
+      try {
+        return await promise
+      } catch (sessionError) {
+        if (currentRevision === revision.current) {
+          clearSession()
+          setUser(firebaseUser)
+          setError(authService.authErrorMessage(sessionError))
+        }
+        throw sessionError
+      } finally {
+        if (inflight.current?.promise === promise) inflight.current = null
+        if (currentRevision === revision.current) setInitializing(false)
       }
     },
-    [commitFirebaseSession],
+    [clearSession],
   )
 
   useEffect(() => {
-    if (isMockMode) {
-      const current = readDemoSession()
-      setAuthToken(current?.token)
-      setInitializing(false)
-      return undefined
-    }
-
     let active = true
-    const unsubscribe = onIdTokenChanged(
-      getFirebaseAuth(),
-      async (firebaseUser) => {
-        if (!active || interactiveOperation.current) return
-        const revision = ++sessionRevision.current
-
-        if (!firebaseUser) {
-          setAuthToken("")
-          setSession(null)
-          setInitializing(false)
-          return
-        }
-
-        try {
-          await commitFirebaseSession(firebaseUser, {}, revision)
-        } catch {
-          if (active && revision === sessionRevision.current) {
-            setSession(null)
-            setAuthToken("")
-          }
-        } finally {
-          if (active && revision === sessionRevision.current) {
+    let unsubscribe = () => {}
+    let unsubscribeToken = () => {}
+    try {
+      const auth = getFirebaseAuth()
+      unsubscribe = onAuthStateChanged(
+        auth,
+        (nextUser) => {
+          if (!active) return
+          if (!nextUser) {
+            ++revision.current
+            inflight.current = null
+            clearSession()
+            setUser(null)
             setInitializing(false)
+            return
           }
+          setUser(nextUser)
+          resolveSession(nextUser).catch(() => {})
+        },
+        (authError) => {
+          if (!active) return
+          setError(authService.authErrorMessage(authError))
+          setInitializing(false)
+        },
+      )
+      unsubscribeToken = onIdTokenChanged(auth, async (tokenUser) => {
+        if (!active || !tokenUser || authenticatedUid.current !== tokenUser.uid)
+          return
+        try {
+          const freshToken = await tokenUser.getIdToken()
+          if (active && authenticatedUid.current === tokenUser.uid) {
+            setAuthToken(freshToken)
+            setToken(freshToken)
+          }
+        } catch (tokenError) {
+          if (active) setError(authService.authErrorMessage(tokenError))
         }
-      },
-    )
-
+      })
+      authService
+        .finishGoogleRedirect()
+        .then(async (result) => {
+          if (active && result) {
+            setRedirectReturnTo(result.returnTo)
+            setUser(result.user)
+            await resolveSession(result.user)
+          }
+        })
+        .catch((redirectError) => {
+          if (active) setError(authService.authErrorMessage(redirectError))
+        })
+        .finally(() => {
+          if (active) setRedirectChecked(true)
+        })
+    } catch (configError) {
+      setError(configError.message)
+      setInitializing(false)
+      setRedirectChecked(true)
+    }
     return () => {
       active = false
       unsubscribe()
+      unsubscribeToken()
+      ++revision.current
     }
-  }, [commitFirebaseSession])
+  }, [clearSession, resolveSession])
 
-  useEffect(() => {
-    if (isMockMode) return
-    try {
-      const pending = isSignInWithEmailLink(
-        getFirebaseAuth(),
-        window.location.href,
-      )
-      setPasswordlessLinkPending(pending)
-      if (pending) {
-        setSavedPasswordlessEmail(
-          readJsonStorage(EMAIL_LINK_STORAGE_KEY)?.email || "",
-        )
-      }
-    } catch {
-      setPasswordlessLinkPending(false)
-    }
+  const complete = useCallback(
+    async (operation) => {
+      setError("")
+      const nextUser = await operation()
+      return nextUser ? resolveSession(nextUser) : null
+    },
+    [resolveSession],
+  )
+
+  const signUpWithEmail = useCallback(async (values) => {
+    setError("")
+    const nextUser = await authService.signUpWithEmail(values)
+    setUser(nextUser)
+    return nextUser
   }, [])
 
-  const login = useCallback(
-    async (email, password) => {
-      if (isMockMode) return null
-      const auth = getFirebaseAuth()
-      return runFirebaseOperation(
-        () => signInWithEmailAndPassword(auth, email.trim(), password),
-        { allowEnrollment: true },
-      )
-    },
-    [runFirebaseOperation],
-  )
-
-  const demoLogin = useCallback(async (role) => {
-    if (!isMockMode) throw new Error("Demo login is disabled.")
-    const profile = await api.getMe(role)
-    const next = { role, profile, token: `demo-${role}-token` }
-    localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify(next))
-    setAuthToken(next.token)
-    setSession(next)
-    return next
-  }, [])
-
-  const loginWithGoogle = useCallback(
-    async (registration = {}) => {
-      if (isMockMode) return demoLogin("customer")
-      const auth = getFirebaseAuth()
-      const provider = new GoogleAuthProvider()
-      provider.setCustomParameters({ prompt: "select_account" })
-      return runFirebaseOperation(() => signInWithPopup(auth, provider), {
-        allowEnrollment: true,
-        registration,
-      })
-    },
-    [demoLogin, runFirebaseOperation],
-  )
-
-  const register = useCallback(
-    async ({ name, email, password, preferredLanguage }) => {
-      if (isMockMode) return demoLogin("customer")
-      const auth = getFirebaseAuth()
-      return runFirebaseOperation(
-        async () => {
-          const currentUser = auth.currentUser
-          const credential =
-            currentUser?.email === email
-              ? await signInWithEmailAndPassword(auth, email, password)
-              : await createUserWithEmailAndPassword(auth, email, password)
-          const firebaseUser = authenticatedUserFrom(credential)
-          await updateProfile(firebaseUser, { displayName: name })
-          return credential
-        },
-        {
-          allowEnrollment: true,
-          registration: { name, preferredLanguage },
-        },
-      )
-    },
-    [demoLogin, runFirebaseOperation],
-  )
-
-  const sendPasswordlessLink = useCallback(async (registration) => {
-    if (isMockMode)
-      throw new Error("Passwordless login is disabled in mock mode.")
-    const email = registration.email.trim()
-    await sendSignInLinkToEmail(getFirebaseAuth(), email, {
-      url: new URL("/login", window.location.origin).toString(),
-      handleCodeInApp: true,
-    })
-    localStorage.setItem(
-      EMAIL_LINK_STORAGE_KEY,
-      JSON.stringify({
-        email,
-        name: registration.name?.trim() || "",
-        preferredLanguage: registration.preferredLanguage || "en",
-      }),
+  const refreshSession = useCallback(async () => {
+    const freshUser = await authService.refreshUser(
+      getFirebaseAuth().currentUser,
     )
-    setSavedPasswordlessEmail(email)
-  }, [])
-
-  const completePasswordlessLogin = useCallback(
-    async (email) => {
-      if (isMockMode)
-        throw new Error("Passwordless login is disabled in mock mode.")
-      const auth = getFirebaseAuth()
-      if (!isSignInWithEmailLink(auth, window.location.href)) {
-        const error = new Error(
-          "This email sign-in link is invalid or expired.",
-        )
-        error.code = "auth/invalid-action-code"
-        localStorage.removeItem(EMAIL_LINK_STORAGE_KEY)
-        setPasswordlessLinkPending(false)
-        setSavedPasswordlessEmail("")
-        window.history.replaceState({}, "", "/login")
-        throw error
-      }
-      const registration = readJsonStorage(EMAIL_LINK_STORAGE_KEY) || {}
-      try {
-        const result = await runFirebaseOperation(
-          () => signInWithEmailLink(auth, email.trim(), window.location.href),
-          { allowEnrollment: true, registration },
-        )
-        localStorage.removeItem(EMAIL_LINK_STORAGE_KEY)
-        setPasswordlessLinkPending(false)
-        setSavedPasswordlessEmail("")
-        return result
-      } catch (error) {
-        if (isInvalidEmailLinkError(error)) {
-          localStorage.removeItem(EMAIL_LINK_STORAGE_KEY)
-          setPasswordlessLinkPending(false)
-          setSavedPasswordlessEmail("")
-          window.history.replaceState({}, "", "/login")
-        }
-        throw error
-      }
-    },
-    [runFirebaseOperation],
-  )
+    setUser(freshUser)
+    return resolveSession(freshUser)
+  }, [resolveSession])
 
   const logout = useCallback(async () => {
-    ++sessionRevision.current
-    interactiveOperation.current = true
-    try {
-      if (isMockMode) localStorage.removeItem(DEMO_SESSION_KEY)
-      else await signOut(getFirebaseAuth())
-    } finally {
-      interactiveOperation.current = false
-      setAuthToken("")
-      setSession(null)
-    }
-  }, [])
+    ++revision.current
+    inflight.current = null
+    await authService.logout()
+    clearSession()
+    setUser(null)
+    setError("")
+  }, [clearSession])
 
   const value = useMemo(
     () => ({
-      role: session?.role ?? null,
-      profile: session?.profile ?? null,
-      token: session?.token ?? null,
-      isAuthenticated: Boolean(session?.role),
+      user,
+      profile,
+      token,
+      role: profile?.role || null,
+      isAuthenticated: Boolean(profile?.role),
       initializing,
-      login,
-      loginWithGoogle,
-      sendPasswordlessLink,
-      completePasswordlessLogin,
-      passwordlessLinkPending,
-      savedPasswordlessEmail,
-      register,
-      demoLogin,
+      error,
+      redirectReturnTo,
+      redirectChecked,
+      clearRedirectReturnTo: () => setRedirectReturnTo(null),
+      signUpWithEmail,
+      signInWithEmail: (email, password) =>
+        complete(() => authService.signInWithEmail(email, password)),
+      signInWithGoogle: (returnTo) =>
+        complete(() => authService.signInWithGoogle(returnTo)),
+      completeEmailLinkSignIn: (email, url) =>
+        complete(() => authService.completeEmailLinkSignIn(email, url)),
+      sendLoginLink: authService.sendLoginLink,
+      resetPassword: authService.resetPassword,
+      resendVerification: () =>
+        authService.resendVerification(getFirebaseAuth().currentUser),
+      refreshSession,
       logout,
     }),
     [
-      session,
+      user,
+      profile,
+      token,
       initializing,
-      login,
-      loginWithGoogle,
-      sendPasswordlessLink,
-      completePasswordlessLogin,
-      passwordlessLinkPending,
-      savedPasswordlessEmail,
-      register,
-      demoLogin,
+      error,
+      redirectReturnTo,
+      redirectChecked,
+      signUpWithEmail,
+      complete,
+      refreshSession,
       logout,
     ],
   )

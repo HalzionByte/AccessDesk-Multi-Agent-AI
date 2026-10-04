@@ -157,3 +157,59 @@ def test_registration_requires_a_verified_firebase_token(client):
         json={"name": "New Customer", "preferredLanguage": "en"},
     )
     assert response.status_code == 401
+
+
+def test_unverified_password_user_cannot_register_or_access_routes(
+    client, monkeypatch
+):
+    monkeypatch.setattr(
+        auth_module,
+        "decode_firebase_token",
+        lambda _: {
+            "uid": "unverified-user",
+            "email": "person@example.com",
+            "firebase": {"sign_in_provider": "password"},
+            "email_verified": False,
+        },
+    )
+
+    registration = client.post(
+        "/auth/register",
+        headers=auth_header("unverified-token"),
+        json={"name": "Unverified User", "preferredLanguage": "en"},
+    )
+    me = client.get("/me", headers=auth_header("unverified-token"))
+
+    assert registration.status_code == 403
+    assert registration.json()["code"] == "email_verification_required"
+    assert me.status_code == 403
+    assert me.json()["code"] == "email_verification_required"
+
+
+def test_verified_password_user_can_register(client, database, monkeypatch):
+    monkeypatch.setattr(
+        auth_module,
+        "decode_firebase_token",
+        lambda _: {
+            "uid": "verified-user",
+            "email": "verified@example.com",
+            "firebase": {"sign_in_provider": "password"},
+            "email_verified": True,
+        },
+    )
+    monkeypatch.setattr(users_module, "get_firebase_app", lambda: object())
+    monkeypatch.setattr(
+        users_module.firebase_auth,
+        "set_custom_user_claims",
+        lambda *args, **kwargs: None,
+    )
+
+    response = client.post(
+        "/auth/register",
+        headers=auth_header("verified-token"),
+        json={"name": "Verified User", "preferredLanguage": "en"},
+    )
+
+    assert response.status_code == 200
+    stored = database.collection("users").document("verified-user").get().to_dict()
+    assert stored["emailVerified"] is True

@@ -28,6 +28,18 @@ def register_customer(
             "The authentication token is missing required identity claims.",
         )
 
+    firebase_claims = claims.get("firebase")
+    if (
+        isinstance(firebase_claims, dict)
+        and firebase_claims.get("sign_in_provider") == "password"
+        and claims.get("email_verified") is not True
+    ):
+        raise AppError(
+            status.HTTP_403_FORBIDDEN,
+            "email_verification_required",
+            "Verify your email before registering.",
+        )
+
     existing_role = claims.get("role")
     if existing_role == UserRole.STAFF.value:
         raise AppError(
@@ -54,6 +66,7 @@ def register_customer(
             {
                 **profile.model_dump(mode="python", by_alias=True),
                 "fictional": False,
+                "emailVerified": bool(claims.get("email_verified", False)),
             },
             merge=True,
         )

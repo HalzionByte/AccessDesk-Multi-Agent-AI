@@ -13,9 +13,10 @@ from app.services.drafts import (
     set_draft_stage,
     update_draft_fields,
 )
-from app.services.events import list_draft_events, log_event
+from app.services.events import list_case_events, list_draft_events, log_event
 from app.services.orders import get_order
 from tests.auth_helpers import auth_header
+from tests.fakes import FakeQuery
 
 
 def order_data(order_id: str, customer_uid: str) -> dict:
@@ -132,3 +133,48 @@ def test_events_are_returned_in_created_order(database, monkeypatch):
 
     events = list_draft_events(database, "draft-1")
     assert [event.actor for event in events] == ["Intake Agent", "Policy Agent"]
+
+
+def test_event_histories_sort_without_requiring_composite_indexes(
+    database, monkeypatch
+):
+    moments = iter(
+        [
+            datetime(2026, 10, 3, 10, 1, tzinfo=UTC),
+            datetime(2026, 10, 3, 10, 0, tzinfo=UTC),
+        ]
+    )
+    monkeypatch.setattr(
+        "app.services.events.datetime",
+        type("Clock", (), {"now": staticmethod(lambda _tz: next(moments))}),
+    )
+    log_event(
+        database,
+        draft_id="draft-1",
+        case_id="case-1",
+        actor="Later",
+        action="later action",
+        outcome="later outcome",
+    )
+    log_event(
+        database,
+        draft_id="draft-1",
+        case_id="case-1",
+        actor="Earlier",
+        action="earlier action",
+        outcome="earlier outcome",
+    )
+    monkeypatch.setattr(
+        FakeQuery,
+        "order_by",
+        lambda *_args: (_ for _ in ()).throw(AssertionError("Composite index needed")),
+    )
+
+    assert [event.actor for event in list_draft_events(database, "draft-1")] == [
+        "Earlier",
+        "Later",
+    ]
+    assert [event.actor for event in list_case_events(database, "case-1")] == [
+        "Earlier",
+        "Later",
+    ]

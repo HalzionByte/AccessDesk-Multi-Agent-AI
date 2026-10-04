@@ -1,0 +1,36 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid} {
+      function isOwner() {
+        return request.auth != null && request.auth.uid == uid;
+      }
+
+      function initialFields() {
+        return ['uid', 'email', 'displayName', 'photoURL', 'providers',
+                'emailVerified', 'createdAt', 'updatedAt', 'lastLoginAt'];
+      }
+
+      allow read: if isOwner();
+      allow create: if isOwner()
+        && request.resource.data.keys().hasAll(initialFields())
+        && request.resource.data.keys().hasOnly(initialFields())
+        && request.resource.data.uid == uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.emailVerified == request.auth.token.email_verified
+        && request.resource.data.displayName is string
+        && (request.resource.data.photoURL == null || request.resource.data.photoURL is string)
+        && request.resource.data.providers is list
+        && request.resource.data.providers.size() <= 8
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.lastLoginAt == request.time;
+      allow update: if isOwner()
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['updatedAt', 'lastLoginAt'])
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.lastLoginAt == request.time;
+      allow delete: if false;
+    }
+  }
+}

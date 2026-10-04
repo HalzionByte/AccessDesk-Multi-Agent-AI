@@ -503,7 +503,7 @@ export default function SupportPage() {
                   </Button>
                 </Card>
               )}
-              <Timeline events={data.events} />
+              {data.events?.length > 0 && <Timeline events={data.events} />}
             </>
           )}
         </div>

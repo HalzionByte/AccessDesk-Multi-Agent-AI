@@ -6,7 +6,11 @@ from pathlib import Path
 import pytest
 
 from app.agents.intake import run_intake_agent
-from app.agents.llm import AgentSpec, run_structured_agent
+from app.agents.llm import (
+    AgentSpec,
+    _without_cache_breakpoints,
+    run_structured_agent,
+)
 from app.agents.policy_agent import run_policy_agent
 from app.agents.tools import AGENT_TOOL_PERMISSIONS, AgentToolbox
 from app.config import Settings
@@ -59,9 +63,7 @@ def test_policy_filters_citations_and_approval_promises(settings, monkeypatch):
             uncertainty=False,
         )
 
-    monkeypatch.setattr(
-        "app.agents.policy_agent.run_structured_agent", invalid_result
-    )
+    monkeypatch.setattr("app.agents.policy_agent.run_structured_agent", invalid_result)
     passage = PolicyCitation(id="P-1", title="Rule", text="Fictional rule")
 
     result = run_policy_agent(
@@ -127,6 +129,42 @@ def test_live_llm_maps_exhausted_rate_limit_to_llm_busy():
 
     assert caught.value.status_code == 503
     assert caught.value.code == "llm_busy"
+
+
+def test_live_llm_does_not_label_invalid_provider_requests_as_busy():
+    settings = Settings(
+        llm_mode="live", groq_api_key="placeholder-test-key", _env_file=None
+    )
+
+    with pytest.raises(AppError) as caught:
+        run_structured_agent(
+            settings,
+            spec=AgentSpec("test", "test", "test"),
+            prompt="test",
+            result_type=IntakeResult,
+            mock_payload={},
+            call=lambda *_: (_ for _ in ()).throw(
+                RuntimeError("provider rejected unsupported request parameter")
+            ),
+        )
+
+    assert caught.value.status_code == 503
+    assert caught.value.code == "llm_unavailable"
+
+
+def test_groq_message_adapter_removes_only_unsupported_cache_markers():
+    messages = [
+        {"role": "system", "content": "Instructions", "cache_breakpoint": True},
+        {"role": "user", "content": "Question", "name": "customer"},
+    ]
+
+    cleaned = _without_cache_breakpoints(messages)
+
+    assert cleaned == [
+        {"role": "system", "content": "Instructions"},
+        {"role": "user", "content": "Question", "name": "customer"},
+    ]
+    assert messages[0]["cache_breakpoint"] is True
 
 
 def test_agent_tool_permissions_and_confirmation_guard(database):

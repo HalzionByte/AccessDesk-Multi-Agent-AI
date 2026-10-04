@@ -37,24 +37,20 @@ def log_event(
 
 
 def list_draft_events(database: Any, draft_id: str) -> list[EventRecord]:
-    query = (
-        database.collection("events")
-        .where(filter=FieldFilter("draftId", "==", draft_id))
-        .order_by("createdAt")
+    query = database.collection("events").where(
+        filter=FieldFilter("draftId", "==", draft_id)
     )
     events: list[EventRecord] = []
     for snapshot in query.stream():
         data = snapshot.to_dict() or {}
         data.setdefault("eventId", snapshot.id)
         events.append(EventRecord.model_validate(data))
-    return events
+    return sorted(events, key=lambda event: (event.created_at, event.event_id))
 
 
 def list_case_events(database: Any, case_id: str) -> list[Event]:
-    query = (
-        database.collection("events")
-        .where(filter=FieldFilter("caseId", "==", case_id))
-        .order_by("createdAt")
+    query = database.collection("events").where(
+        filter=FieldFilter("caseId", "==", case_id)
     )
     events: list[Event] = []
     for snapshot in query.stream():
@@ -72,4 +68,4 @@ def list_case_events(database: Any, case_id: str) -> list[Event]:
                 at=record.created_at,
             )
         )
-    return events
+    return sorted(events, key=lambda event: (event.created_at, event.event_id))

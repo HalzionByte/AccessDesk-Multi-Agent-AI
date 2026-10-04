@@ -158,6 +158,7 @@ def seed(settings: Settings, *, reset: bool) -> None:
                 email=demo_user.email,
                 password=password,
                 display_name=demo_user.name,
+                email_verified=True,
                 disabled=False,
                 app=firebase_app,
             )
@@ -167,6 +168,7 @@ def seed(settings: Settings, *, reset: bool) -> None:
                 email=demo_user.email,
                 password=password,
                 display_name=demo_user.name,
+                email_verified=True,
                 app=firebase_app,
             )
 

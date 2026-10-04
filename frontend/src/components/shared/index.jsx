@@ -105,7 +105,7 @@ export function Checklist({ items }) {
   )
 }
 
-export function Timeline({ events, title = "Agent activity" }) {
+export function Timeline({ events = [], title = "Agent activity" }) {
   return (
     <Card>
       <p className="mb-4 font-semibold text-slate-900 dark:text-stone-100">

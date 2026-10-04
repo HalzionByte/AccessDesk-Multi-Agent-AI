@@ -144,9 +144,13 @@ export default function AppShell() {
                     <Button
                       variant="ghost"
                       className="w-full justify-start"
-                      onClick={() => {
-                        logout()
-                        navigate("/login")
+                      onClick={async () => {
+                        try {
+                          await logout()
+                          navigate("/login")
+                        } catch {
+                          setUserOpen(false)
+                        }
                       }}
                     >
                       Log out

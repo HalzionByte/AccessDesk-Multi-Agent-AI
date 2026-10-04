@@ -1,397 +1,341 @@
-import { useCallback, useEffect, useState } from "react"
-import { useNavigate } from "react-router"
-import { isMockMode } from "../api/client"
-import {
-  Button,
-  Card,
-  ErrorBanner,
-  Input,
-  Select,
-  Spinner,
-} from "../components/ui"
+import { useState } from "react"
+import { Link, useLocation, useNavigate } from "react-router"
+import { Button, Card, ErrorBanner, Input } from "../components/ui"
 import { useAuth } from "../context/AuthContext"
 import {
-  authenticationErrorMessage,
-  validatePasswordlessRegistration,
-  validateRegistration,
-} from "./authForm"
-export default function LoginPage() {
-  const {
-    completePasswordlessLogin,
-    demoLogin,
-    initializing,
-    isAuthenticated,
-    login,
-    loginWithGoogle,
-    passwordlessLinkPending,
-    register,
-    role,
-    savedPasswordlessEmail,
-    sendPasswordlessLink,
-  } = useAuth()
+  authErrorMessage,
+  safeReturnTo,
+  validateEmail,
+  validatePassword,
+} from "../services/auth"
+
+export default function LoginPage({ mode = "signin" }) {
+  const auth = useAuth()
   const navigate = useNavigate()
-  const [mode, setMode] = useState("login")
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
-  const [notice, setNotice] = useState("")
+  const location = useLocation()
+  const params = new URLSearchParams(location.search)
+  const returnTo = params.get("returnTo")
+  const otherPath = `${mode === "signup" ? "/login" : "/signup"}${location.search}`
   const [form, setForm] = useState({
     name: "",
     email: "",
     password: "",
     confirmPassword: "",
-    preferredLanguage: "en",
   })
-  const [lastRole, setLastRole] = useState(null)
-  const [retryAction, setRetryAction] = useState(null)
-  const finishEmailLink = useCallback(
-    async (email) => {
-      if (!email.trim()) {
-        setError("Enter the email address that received this sign-in link.")
-        return
-      }
-      setLoading(true)
-      setError("")
-      setRetryAction("email-link-complete")
-      try {
-        const session = await completePasswordlessLogin(email)
-        navigate(session.role === "staff" ? "/staff" : "/support")
-      } catch (requestError) {
-        if (
-          requestError?.code === "auth/invalid-action-code" ||
-          requestError?.code === "auth/expired-action-code"
-        ) {
-          setRetryAction("email-link-request")
-        }
-        setError(authenticationErrorMessage(requestError, "login"))
-      } finally {
-        setLoading(false)
-      }
-    },
-    [completePasswordlessLogin, navigate],
-  )
-  const authenticate = async (demoRole = null) => {
-    if (loading || initializing) return
-    if (passwordlessLinkPending) {
-      await finishEmailLink(form.email)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState("")
+  const [notice, setNotice] = useState("")
+  const [resetOpen, setResetOpen] = useState(false)
+
+  async function perform(operation) {
+    if (busy) return
+    setBusy(true)
+    setError("")
+    setNotice("")
+    try {
+      return await operation()
+    } catch (failure) {
+      setError(authErrorMessage(failure))
+      return null
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function destination(session) {
+    if (!session?.profile?.role) return
+    navigate(
+      safeReturnTo(
+        returnTo,
+        session.profile.role === "staff" ? "/staff" : "/support",
+      ),
+      { replace: true },
+    )
+  }
+
+  async function submit(event) {
+    event.preventDefault()
+    if (!validateEmail(form.email))
+      return setError("Enter a valid email address.")
+    if (resetOpen) {
+      await perform(async () => {
+        await auth.resetPassword(form.email)
+        setNotice(
+          "If this email has an account, password reset instructions have been sent.",
+        )
+      })
       return
     }
-    if (mode === "register" && !demoRole) {
-      const validationError = validateRegistration(form)
-      if (validationError) {
-        setError(validationError)
-        return
-      }
-    }
-    setLoading(true)
-    setError("")
-    setLastRole(demoRole)
-    setRetryAction("form")
-    try {
-      const session = demoRole
-        ? await demoLogin(demoRole)
-        : mode === "register"
-          ? await register({
-              name: form.name.trim(),
-              email: form.email.trim(),
-              password: form.password,
-              preferredLanguage: form.preferredLanguage,
-            })
-          : isMockMode
-            ? await demoLogin("customer")
-            : await login(form.email.trim(), form.password)
-      navigate(session.role === "staff" ? "/staff" : "/support")
-    } catch (requestError) {
-      setError(authenticationErrorMessage(requestError, mode))
-    } finally {
-      setLoading(false)
-    }
-  }
-  const authenticateWithGoogle = async () => {
-    if (loading || initializing) return
-    setLoading(true)
-    setError("")
-    setNotice("")
-    setRetryAction("google")
-    try {
-      const session = await loginWithGoogle({
-        name: mode === "register" ? form.name.trim() : "",
-        preferredLanguage: form.preferredLanguage,
+    if (mode === "signup") {
+      if (form.name.trim().length < 2)
+        return setError("Enter your full name (at least 2 characters).")
+      if (!validatePassword(form.password))
+        return setError("Use a password with at least 8 characters.")
+      if (form.password !== form.confirmPassword)
+        return setError("The passwords do not match.")
+      await perform(async () => {
+        await auth.signUpWithEmail({
+          name: form.name,
+          email: form.email,
+          password: form.password,
+        })
+        setNotice("Account created. Check your inbox for a verification email.")
       })
-      navigate(session.role === "staff" ? "/staff" : "/support")
-    } catch (requestError) {
-      setError(authenticationErrorMessage(requestError, mode))
-    } finally {
-      setLoading(false)
-    }
-  }
-  const requestPasswordlessLink = async () => {
-    if (loading || initializing) return
-    const email = form.email.trim()
-    const validationError =
-      mode === "register"
-        ? validatePasswordlessRegistration({ name: form.name, email })
-        : !email
-          ? "Enter your email address."
-          : ""
-    if (validationError) {
-      setError(validationError)
       return
     }
-    setLoading(true)
-    setError("")
-    setNotice("")
-    setRetryAction("email-link-request")
-    try {
-      await sendPasswordlessLink({
-        email,
-        name: mode === "register" ? form.name : "",
-        preferredLanguage: form.preferredLanguage,
-      })
-      setNotice(`We sent a secure sign-in link to ${email}.`)
-    } catch (requestError) {
-      setError(authenticationErrorMessage(requestError, mode))
-    } finally {
-      setLoading(false)
-    }
+    if (!validatePassword(form.password))
+      return setError("Enter your password (at least 8 characters).")
+    const session = await perform(() =>
+      auth.signInWithEmail(form.email, form.password),
+    )
+    destination(session)
   }
 
-  useEffect(() => {
-    if (!initializing && isAuthenticated)
-      navigate(role === "staff" ? "/staff" : "/support", { replace: true })
-  }, [initializing, isAuthenticated, navigate, role])
-
-  useEffect(() => {
-    if (!passwordlessLinkPending || !savedPasswordlessEmail) return
-    setForm((current) => ({ ...current, email: savedPasswordlessEmail }))
-  }, [passwordlessLinkPending, savedPasswordlessEmail])
-
-  const changeMode = (nextMode) => {
-    setMode(nextMode)
-    setError("")
-    setNotice("")
-    setLastRole(null)
-    setRetryAction(null)
-    setForm((current) => ({
-      ...current,
-      password: "",
-      confirmPassword: "",
-    }))
+  async function useGoogle() {
+    const session = await perform(() => auth.signInWithGoogle(returnTo))
+    destination(session)
   }
 
-  const retryLastAction = () => {
-    if (retryAction === "google") return authenticateWithGoogle()
-    if (retryAction === "email-link-request") return requestPasswordlessLink()
-    if (retryAction === "email-link-complete")
-      return finishEmailLink(form.email)
-    return authenticate(lastRole)
+  async function useEmailLink() {
+    if (!validateEmail(form.email))
+      return setError("Enter a valid email address first.")
+    if (mode === "signup" && form.name.trim().length < 2)
+      return setError("Enter your full name (at least 2 characters).")
+    await perform(async () => {
+      await auth.sendLoginLink(
+        form.email,
+        safeReturnTo(returnTo),
+        mode === "signup" ? form.name : "",
+      )
+      setNotice(
+        `A sign-in link has been sent to ${form.email.trim()}. Open it in this browser or enter your email on the linked page.`,
+      )
+    })
   }
 
-  if (initializing) {
+  if (auth.user && !auth.user.emailVerified) {
     return (
-      <div className="flex min-h-48 items-center justify-center" role="status">
-        <Spinner className="size-6" />
-        <span className="sr-only">Checking your sign-in session</span>
+      <div className="mx-auto max-w-md py-8 sm:py-14">
+        <Card className="space-y-4 p-6 sm:p-8">
+          <h1 className="text-2xl font-bold">Verify your email</h1>
+          <p className="text-sm leading-6 text-slate-600 dark:text-stone-300">
+            We sent a verification link to {auth.user.email}. Open it, then
+            return here and select “I verified my email”.
+          </p>
+          {(error || auth.error) && (
+            <ErrorBanner message={error || auth.error} />
+          )}
+          {notice && (
+            <p
+              role="status"
+              className="text-sm text-emerald-700 dark:text-emerald-300"
+            >
+              {notice}
+            </p>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              loading={busy}
+              disabled={busy}
+              onClick={() =>
+                perform(async () => {
+                  const session = await auth.refreshSession()
+                  if (session) destination(session)
+                  else
+                    setNotice(
+                      "This email is not verified yet. Check your inbox and try again.",
+                    )
+                })
+              }
+            >
+              I verified my email
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={busy}
+              onClick={() =>
+                perform(async () => {
+                  await auth.resendVerification()
+                  setNotice("A new verification email has been sent.")
+                })
+              }
+            >
+              Resend email
+            </Button>
+            <Button
+              variant="ghost"
+              disabled={busy}
+              onClick={() => perform(() => auth.logout())}
+            >
+              Use another account
+            </Button>
+          </div>
+        </Card>
       </div>
     )
   }
 
+  const setupPending = auth.user && !auth.role
+
   return (
-    <div className="mx-auto flex max-w-md items-center py-8 sm:py-14">
-      <Card className="w-full p-6 sm:p-8">
-        <div className="mb-7 text-center">
-          <p className="text-2xl font-bold tracking-tight">
-            {passwordlessLinkPending
-              ? "Finish signing in"
-              : mode === "login"
-                ? "Welcome back"
-                : "Create your account"}
-          </p>
-          <p className="mt-2 text-sm text-slate-600 dark:text-stone-400">
-            {passwordlessLinkPending
-              ? "Confirm the email address that received this secure link."
-              : mode === "login"
-                ? "Log in to manage your support requests."
-                : "Sign up as a customer to start and track support requests."}
-          </p>
-        </div>
-        {!passwordlessLinkPending && (
-          <div
-            className="mb-6 grid grid-cols-2 rounded-lg bg-slate-100 p-1 dark:bg-stone-900"
-            aria-label="Authentication mode"
-          >
-            <Button
-              variant={mode === "login" ? "primary" : "ghost"}
-              className="w-full"
-              aria-pressed={mode === "login"}
-              onClick={() => changeMode("login")}
-            >
-              Log in
-            </Button>
-            <Button
-              variant={mode === "register" ? "primary" : "ghost"}
-              className="w-full"
-              aria-pressed={mode === "register"}
-              onClick={() => changeMode("register")}
-            >
-              Create account
-            </Button>
+    <div className="mx-auto max-w-md py-8 sm:py-14">
+      <Card className="p-6 sm:p-8">
+        <h1 className="text-2xl font-bold tracking-tight">
+          {resetOpen
+            ? "Reset your password"
+            : mode === "signup"
+              ? "Create your account"
+              : "Welcome back"}
+        </h1>
+        <p className="mt-2 text-sm text-slate-600 dark:text-stone-400">
+          {resetOpen
+            ? "We'll email you a reset link."
+            : mode === "signup"
+              ? "Start and track your support requests."
+              : "Sign in to manage your support requests."}
+        </p>
+        {(error || auth.error) && (
+          <div className="mt-5">
+            <ErrorBanner message={error || auth.error} />
           </div>
         )}
-        {error && (
-          <div className="mb-5">
-            <ErrorBanner message={error} onRetry={retryLastAction} />
+        {setupPending && (
+          <div className="mt-4 flex gap-2">
+            <Button
+              variant="secondary"
+              disabled={busy}
+              onClick={() => perform(() => auth.refreshSession())}
+            >
+              Retry account setup
+            </Button>
+            <Button
+              variant="ghost"
+              disabled={busy}
+              onClick={() => perform(() => auth.logout())}
+            >
+              Sign out
+            </Button>
           </div>
         )}
         {notice && (
-          <div
+          <p
             role="status"
-            className="mb-5 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-200"
+            className="mt-5 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800 dark:bg-emerald-400/10 dark:text-emerald-200"
           >
             {notice}
-          </div>
+          </p>
         )}
-        <form
-          className="space-y-4"
-          onSubmit={(event) => {
-            event.preventDefault()
-            authenticate()
-          }}
-        >
-          {mode === "register" && !passwordlessLinkPending && (
+        <form className="mt-6 space-y-4" onSubmit={submit}>
+          {mode === "signup" && !resetOpen && (
             <Input
               label="Full name"
               autoComplete="name"
-              required
-              minLength={2}
               maxLength={100}
               value={form.name}
               onChange={(event) =>
                 setForm({ ...form, name: event.target.value })
               }
-              placeholder="Your full name"
+              required
             />
           )}
           <Input
             label="Email"
             type="email"
             autoComplete="email"
-            required
             value={form.email}
             onChange={(event) =>
               setForm({ ...form, email: event.target.value })
             }
-            placeholder="you@example.com"
+            required
           />
-          {!passwordlessLinkPending && (
+          {!resetOpen && (
             <Input
               label="Password"
               type="password"
               autoComplete={
-                mode === "register" ? "new-password" : "current-password"
+                mode === "signup" ? "new-password" : "current-password"
               }
-              required
-              minLength={mode === "register" ? 8 : undefined}
               value={form.password}
               onChange={(event) =>
                 setForm({ ...form, password: event.target.value })
               }
-              placeholder="Enter your password"
+              required
+              minLength={8}
             />
           )}
-          {mode === "register" && !passwordlessLinkPending && (
-            <>
-              <Input
-                label="Confirm password"
-                type="password"
-                autoComplete="new-password"
-                required
-                minLength={8}
-                value={form.confirmPassword}
-                onChange={(event) =>
-                  setForm({ ...form, confirmPassword: event.target.value })
-                }
-                placeholder="Enter the password again"
-              />
-              <Select
-                label="Preferred language"
-                value={form.preferredLanguage}
-                onChange={(event) =>
-                  setForm({ ...form, preferredLanguage: event.target.value })
-                }
-              >
-                <option value="en">English</option>
-                <option value="roman-urdu">Roman Urdu</option>
-              </Select>
-            </>
+          {mode === "signup" && !resetOpen && (
+            <Input
+              label="Confirm password"
+              type="password"
+              autoComplete="new-password"
+              value={form.confirmPassword}
+              onChange={(event) =>
+                setForm({ ...form, confirmPassword: event.target.value })
+              }
+              required
+              minLength={8}
+            />
           )}
-          <Button type="submit" loading={loading} className="w-full">
-            {passwordlessLinkPending
-              ? "Complete email sign-in"
-              : mode === "login"
-                ? "Log in"
-                : "Create customer account"}
+          <Button
+            type="submit"
+            className="w-full"
+            loading={busy}
+            disabled={busy}
+          >
+            {resetOpen
+              ? "Send reset email"
+              : mode === "signup"
+                ? "Sign up"
+                : "Sign in"}
           </Button>
         </form>
-        {!isMockMode && !passwordlessLinkPending && (
-          <>
-            <div className="my-6 flex items-center gap-3 text-xs text-slate-400 dark:text-stone-500">
-              <span className="h-px flex-1 bg-slate-200 dark:bg-stone-600" />
-              Or continue without a password
-              <span className="h-px flex-1 bg-slate-200 dark:bg-stone-600" />
-            </div>
-            <div className="grid gap-3">
-              <Button
-                variant="secondary"
-                className="w-full"
-                disabled={loading}
-                onClick={authenticateWithGoogle}
-              >
-                <span aria-hidden="true" className="font-bold text-blue-600">
-                  G
-                </span>
-                Continue with Google
-              </Button>
-              <Button
-                variant="secondary"
-                className="w-full"
-                disabled={loading}
-                onClick={requestPasswordlessLink}
-              >
-                <span aria-hidden="true">✉</span>
-                Email me a sign-in link
-              </Button>
-            </div>
-          </>
+        {!resetOpen && (
+          <div className="mt-4 grid gap-2">
+            <Button
+              variant="secondary"
+              className="w-full"
+              disabled={busy}
+              onClick={useGoogle}
+            >
+              {mode === "signup"
+                ? "Sign up with Google"
+                : "Sign in with Google"}
+            </Button>
+            <Button
+              variant="secondary"
+              className="w-full"
+              disabled={busy}
+              onClick={useEmailLink}
+            >
+              {mode === "signup"
+                ? "Send me a sign-in link"
+                : "Email me a sign-in link"}
+            </Button>
+          </div>
         )}
-        {isMockMode && mode === "login" && (
-          <>
-            <div className="my-6 flex items-center gap-3 text-xs text-slate-400 dark:text-stone-500">
-              <span className="h-px flex-1 bg-slate-200 dark:bg-stone-600" />
-              Demo access
-              <span className="h-px flex-1 bg-slate-200 dark:bg-stone-600" />
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Button
-                variant="secondary"
-                disabled={loading}
-                onClick={() => authenticate("customer")}
-              >
-                Log in as customer
-              </Button>
-              <Button
-                variant="secondary"
-                disabled={loading}
-                onClick={() => authenticate("staff")}
-              >
-                Log in as staff
-              </Button>
-            </div>
-          </>
+        {mode === "signin" && (
+          <Button
+            variant="ghost"
+            className="mt-3 w-full"
+            disabled={busy}
+            onClick={() => {
+              setResetOpen(!resetOpen)
+              setError("")
+              setNotice("")
+            }}
+          >
+            {resetOpen ? "Back to sign in" : "Forgot password?"}
+          </Button>
         )}
-        {mode === "register" && !passwordlessLinkPending && (
-          <p className="mt-5 text-center text-xs text-slate-500 dark:text-stone-400">
-            New accounts are customers. Staff access is created by an
-            administrator.
+        {!resetOpen && (
+          <p className="mt-5 text-center text-sm text-slate-600 dark:text-stone-400">
+            {mode === "signup" ? "Already have an account?" : "New here?"}{" "}
+            <Link
+              className="font-semibold text-indigo-600 hover:underline dark:text-indigo-300"
+              to={otherPath}
+            >
+              {mode === "signup" ? "Sign in" : "Sign up"}
+            </Link>
           </p>
         )}
       </Card>

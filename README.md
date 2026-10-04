@@ -16,7 +16,7 @@ AccessDesk automates the preparation and tracking of a support case while keepin
 ## What AccessDesk does
 
 - Understands informal complaints in English and Roman Urdu.
-- Lets new customers create an account while keeping staff enrollment restricted.
+- Keeps customer and staff workflows separated through backend authorization.
 - Provides welcoming public Home, About, and Contact pages before authentication.
 - Extracts the order number, issue, description, and requested resolution.
 - Verifies that the order belongs to the signed-in customer.
@@ -85,7 +85,9 @@ A deterministic stage router runs only the agent needed for the current step. Ag
 └──────────────────────┘
 ```
 
-The browser uses Firebase Authentication but never accesses Firestore directly. Firestore rules deny client access; all application data passes through FastAPI authorization and validation.
+The browser uses Firebase Authentication and writes only its own `users/{uid}`
+profile metadata under restrictive Firestore rules. Orders, cases, drafts, and
+other application data pass through FastAPI authorization and validation.
 
 ## Technology stack
 
@@ -179,7 +181,7 @@ Important entry points:
 
 ## Local setup
 
-The commands below describe the intended development environment once the backend and frontend are implemented.
+The commands below set up the implemented backend and frontend locally.
 
 ### Prerequisites
 
@@ -208,20 +210,24 @@ VITE_FIREBASE_AUTH_DOMAIN=
 VITE_FIREBASE_PROJECT_ID=
 VITE_FIREBASE_APP_ID=
 VITE_API_URL=http://localhost:8000
-VITE_USE_MOCKS=true
+VITE_USE_MOCKS=false
 ```
 
 Keep service-account files and API keys out of version control.
 
-In Firebase Console, open **Authentication → Sign-in method** and enable:
+In Firebase Console, configure **Authentication → Sign-in method** with:
 
 - **Email/Password**, including **Email link (passwordless sign-in)**
 - **Google**, with a project support email selected
 
 Under **Authentication → Settings → Authorized domains**, keep `localhost` for
 local development and add the deployed frontend domain before production use.
-Passwordless links return to `/login` on the same frontend origin from which
-they were requested.
+Email sign-in links return to `/auth/finish` on the same frontend origin from
+which they are requested. The app sets this action URL through the Firebase SDK.
+Publish [firestore.rules](firestore.rules) in **Firestore Database → Rules** before
+testing sign-in; it permits users to create and read their own profile while
+protecting backend-owned role fields. Configure the verification and password
+reset email templates in **Authentication → Templates**.
 
 ### 2. Create and activate the backend virtual environment
 
@@ -268,6 +274,16 @@ option deletes AccessDesk application documents in that project, so do not use i
 against a project containing real data. Remove the seed password from deployment
 configuration after seeding.
 
+Seeded demo accounts are marked email verified. If you seeded them before this
+change, run `python seed.py --confirm-project YOUR_FIREBASE_PROJECT_ID` without
+`--reset` to update the demo accounts and data.
+
+To add an isolated fictional customer named Mubashir with four sample orders,
+run `python seed_mubashir.py --confirm-project YOUR_FIREBASE_PROJECT_ID` from
+`backend/`. Sign in as `mubashir@demo.accessdesk.app` using the password set in
+`SEED_USER_PASSWORD`. This command is safe to rerun and does not reset other
+demo accounts or orders. Use `--check` for a read-only existence check.
+
 ### 4. Start the backend
 
 ```powershell
@@ -292,8 +308,9 @@ Open `http://localhost:5173`.
 Vite loads the shared repository-root `.env` through
 `frontend/vite.config.ts`.
 
-For frontend-only fixture development, use `VITE_USE_MOCKS=true`. To exercise
-real Firebase and FastAPI without consuming Groq allowance, use
+For fixture-backed API development, use `VITE_USE_MOCKS=true`; Firebase sign-in
+and Firestore profile sync are still required. To exercise real Firebase and
+FastAPI without consuming Groq allowance, use
 `VITE_USE_MOCKS=false` with `LLM_MODE=mock`. For the fully integrated flow, use
 `VITE_USE_MOCKS=false` with `LLM_MODE=live`.
 
@@ -343,8 +360,8 @@ The evaluation set contains 15 labelled fictional complaints: six English, six R
   `frontend/src/components/shared/` before introducing another primitive.
 - Keep mock/live API behavior in `frontend/src/api/client.js`; pages should not
   define alternate backend endpoints.
-- Use Firebase only for browser authentication. Application data must travel
-  through authenticated FastAPI endpoints.
+- Keep browser Firestore access limited to the signed-in user's profile
+  metadata. Orders, cases, and drafts must use authenticated FastAPI endpoints.
 - Keep customer-facing text concise, sentence case, and accessible.
 - Every data screen should provide loading, empty, error, and retry states.
 - Treat model output and customer-supplied prompt content as untrusted input.
@@ -381,12 +398,13 @@ python eval/run_eval.py --mode live
 
 ## Current project status
 
-The planned core features are implemented. The backend provides authenticated identity, orders,
+The backend core features are implemented. It provides authenticated identity, orders,
 durable drafts, attachments, controlled Intake/Policy/Resolution agents, the
 stage-based `/chat` workflow, and idempotent customer case workflows. The
-frontend provides Firebase authentication with a mock-mode fallback, the shared
-design system, customer support and My Cases experiences, and the staff review
-dashboard. Mock evaluation is available without an API key; live Groq evaluation
+frontend provides the shared design system, public pages, customer support and
+My Cases experiences, the staff review dashboard, and Firebase email/password,
+email-link, and Google authentication. Mock
+evaluation is available without an API key; live Groq evaluation
 must be run separately with `LLM_MODE=live` and `GROQ_API_KEY` configured. See
 `AI_USAGE.md` and `docs/qa-report.md` for implementation and verification notes.
 
